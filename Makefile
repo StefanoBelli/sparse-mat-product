@@ -70,56 +70,56 @@ common: $(COMMON_OBJ_FILES)
 
 openmp: common $(OPENMP_SPECIFIC_OBJ_FILES)
 	@mkdir -p $(OUT_BIN_DIR)/$(BUILD_TYPE)
-	@echo -e '\tOPENMP-LINK'
+	@printf '\tOPENMP-LINK\n'
 	@$(CC) \
 		$(COMMON_OBJ_FILES) \
 		$(OPENMP_SPECIFIC_OBJ_FILES) \
 		$(LINK_LIBS) \
 		-o $(ELF_OUT_OPENMP)
-	@echo -e '\tELF $(ELF_OUT_OPENMP)'
+	@printf '\tELF $(ELF_OUT_OPENMP)\n'
 
 cuda: common $(CUDA_C_SPECIFIC_OBJ_FILES) $(CUDA_CU_SPECIFIC_OBJ_FILES)
 	@mkdir -p $(OUT_BIN_DIR)/$(BUILD_TYPE)
-	@echo -e '\tCUDA-LINK'
+	@printf '\tCUDA-LINK\n'
 	@$(NVCC) \
 		$(COMMON_OBJ_FILES) \
 		$(CUDA_C_SPECIFIC_OBJ_FILES) \
 		$(CUDA_CU_SPECIFIC_OBJ_FILES) \
 		$(LINK_LIBS) \
 		-o $(ELF_OUT_CUDA)
-	@echo -e '\tELF $(ELF_OUT_CUDA)'
+	@printf '\tELF $(ELF_OUT_CUDA)\n'
 
 CLEAN_COMMON_OBJS := $(shell find ./src -type f -name '*.o' -not -path "./src/main*")
 clean-common:
 	@for file in $(CLEAN_COMMON_OBJS); do \
-        echo "\tCLEAN $${file}"; \
+        printf "\tCLEAN $${file}\n"; \
         rm $$file; \
     done	
 
 CLEAN_CUDA_OBJS := $(shell find ./src/main/cuda -type f -name '*.o')
 clean-cuda:
 	@for file in $(CLEAN_CUDA_OBJS); do \
-        echo "\tCLEAN $${file}"; \
+        printf "\tCLEAN $${file}\n"; \
         rm $$file; \
     done
 
 CLEAN_OPENMP_OBJS := $(shell find ./src/main/openmp -type f -name '*.o')
 clean-openmp:
 	@for file in $(CLEAN_OPENMP_OBJS); do \
-        echo "\tCLEAN $${file}"; \
+        printf "\tCLEAN $${file}\n"; \
         rm $$file; \
     done
 
 $(CUDA_C_SPECIFIC_OBJ_FILES) $(COMMON_OBJ_FILES): %.o: %.c
-	@echo -e '\tCC $<'
+	@printf '\tCC $<\n'
 	@$(CC) $(CC_CFLAGS) $(CFLAGS) $< -c -o $@
 
 $(OPENMP_SPECIFIC_OBJ_FILES): %.o: %.c
-	@echo -e '\tCC $<'
+	@printf '\tCC $<\n'
 	@$(CC) -fopenmp $(CC_CFLAGS) $(CFLAGS) $< -c -o $@
  
 $(CUDA_CU_SPECIFIC_OBJ_FILES): %.o: %.cu
-	@echo -e '\tCC $<'
+	@printf '\tCC $<\n'
 	@$(NVCC) $(NVCC_CFLAGS) -Xcompiler="$(CFLAGS) $(NVCC_CC_CFLAGS)" $< -c -o $@
 
 help:
