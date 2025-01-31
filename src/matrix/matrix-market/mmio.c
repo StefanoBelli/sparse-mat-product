@@ -1,3 +1,8 @@
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-parameter"
+#pragma GCC diagnostic ignored "-Wunused-but-set-variable"
+#pragma GCC diagnostic ignored "-Wunused-result"
+
 /* 
 *   Matrix Market I/O library for ANSI C
 *
@@ -5,7 +10,6 @@
 *
 *
 */
-
 
 #include <stdio.h>
 #include <string.h>
@@ -509,3 +513,5 @@ char  *mm_typecode_to_str(MM_typecode matcode)
     return mm_strdup(buffer);
 
 }
+
+#pragma GCC diagnostic pop
