@@ -1,0 +1,39 @@
+# CUDA
+
+*.i
+*.ii
+*.gpu
+*.ptx
+*.cubin
+*.fatbin
+
+# CMake
+
+CMakeLists.txt.user
+CMakeCache.txt
+CMakeFiles
+CMakeScripts
+Testing
+Makefile
+cmake_install.cmake
+install_manifest.txt
+compile_commands.json
+CTestTestfile.cmake
+_deps
+CMakeUserPresets.json
+
+# C/C++
+
+*.slo
+*.lo
+*.o
+*.obj
+*.so
+*.a
+*.out
+
+# User
+
+bin/
+out/
+.vscode/
