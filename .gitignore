@@ -37,3 +37,10 @@ CMakeUserPresets.json
 bin/
 out/
 .vscode/
+
+# Avoid any MatrixMarket bin format-stored matrix
+
+dl-matrices/
+*.tgz
+*.tar*
+*.mtx
