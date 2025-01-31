@@ -41,6 +41,5 @@ out/
 # Avoid any MatrixMarket bin format-stored matrix
 
 dl-matrices/
-*.tgz
-*.tar*
+*.tar.gz
 *.mtx
