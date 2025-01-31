@@ -91,18 +91,24 @@ cuda: common $(CUDA_C_SPECIFIC_OBJ_FILES) $(CUDA_CU_SPECIFIC_OBJ_FILES)
 
 CLEAN_COMMON_OBJS := $(shell find ./src -type f -name '*.o' -not -path "./src/main*")
 clean-common:
-	@for obj in $(CLEAN_COMMON_OBJS); do echo "\tCLEAN $$obj"; done
-	@rm $(CLEAN_COMMON_OBJS)
+	@for file in $(CLEAN_COMMON_OBJS); do \
+        echo "\tCLEAN $${file}"; \
+        rm $$file; \
+    done	
 
 CLEAN_CUDA_OBJS := $(shell find ./src/main/cuda -type f -name '*.o')
 clean-cuda:
-	@for obj in $(CLEAN_CUDA_OBJS); do echo "\tCLEAN $$obj"; done
-	@rm $(CLEAN_CUDA_OBJS)
+	@for file in $(CLEAN_CUDA_OBJS); do \
+        echo "\tCLEAN $${file}"; \
+        rm $$file; \
+    done
 
 CLEAN_OPENMP_OBJS := $(shell find ./src/main/openmp -type f -name '*.o')
 clean-openmp:
-	@for obj in $(CLEAN_OPENMP_OBJS); do echo "\tCLEAN $$obj"; done
-	@rm $(CLEAN_OPENMP_OBJS)
+	@for file in $(CLEAN_OPENMP_OBJS); do \
+        echo "\tCLEAN $${file}"; \
+        rm $$file; \
+    done
 
 $(CUDA_C_SPECIFIC_OBJ_FILES) $(COMMON_OBJ_FILES): %.o: %.c
 	@echo -e '\tCC $<'
