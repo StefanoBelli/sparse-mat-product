@@ -22,7 +22,7 @@ CFLAGS=-Wall -W -Wextra -Wshadow -march=native -I$(INCLUDES)
 CC_CFLAGS=-std=c11
 NVCC_CFLAGS=-Xptxas="--verbose --warn-on-double-precision-use --warn-on-local-memory-usage --warn-on-spills"
 NVCC_CC_CFLAGS=
-LINK_LIBS=-lcurl
+LINK_LIBS=
 
 ifeq ($(BUILD_TYPE), release)
 	CFLAGS += -O3
@@ -64,7 +64,7 @@ $(info extra cxx-host-forwarded nvcc flags: NVCC_CC_CFLAGS=$(NVCC_CC_CFLAGS))
 
 all: openmp cuda
 
-clean: clean-common clean-cuda clean-openmp
+clean: clean-common clean-openmp clean-cuda
 
 common: $(COMMON_OBJ_FILES)
 
