@@ -78,17 +78,16 @@ static int has_file_ext(const char* filename, const char* ext) {
     return strcmp(dotat, ext);
 }
 
-#define __freopen(mode, ...) \
+#define __freopen(__path, __mode, __fp) \
     do { \
-        *fp = freopen(filepath, mode, *fp); \
-        if(*fp == NULL) { \
+        if((__fp = freopen(__path, __mode, __fp)) == NULL) { \
             log_error(freopen); \
-            __VA_ARGS__; \
+            exit(EXIT_FAILURE); \
         } \
     } while(0)
 
 static void replace_file_content(const char* filepath, FILE **fp, struct valid_line_list *vll_new_head) {
-    __freopen("w", exit(EXIT_FAILURE));
+    __freopen(filepath, "w", *fp);
 
     while(vll_new_head) {
         fprintf(*fp, "%s\n", vll_new_head->lineptr);
@@ -101,19 +100,12 @@ static void replace_file_content(const char* filepath, FILE **fp, struct valid_l
         free_reset_ptr(bak);
     }
 
-    if(fflush(*fp)) {
-        log_error(fflush);
-    }
-
-    __freopen("r");
+    __freopen(filepath, "r+", *fp);
 }
-
-#undef __freopen
 
 #define fail(fn) \
     do { \
         log_error(fn); \
-        free_reset_ptr(cd); \
         exit(EXIT_FAILURE); \
     } while(0)
 
@@ -137,11 +129,8 @@ void open_cachedir(const char *cachedir, struct cachedesc **cd_out) {
     if(fp == NULL) {
         fail(fopen);
     }
-    
-    fp = freopen(cachedesc_filename, "r", fp);
-    if(fp == NULL) {
-        fail(freopen);
-    }
+
+    __freopen(cachedesc_filename, "r+", fp);
 
     memset(cd->cachedir_path, 0, PATH_MAX + 1);
     memcpy(cd->cachedir_path, cachedir, strlen(cachedir));
@@ -154,6 +143,7 @@ void open_cachedir(const char *cachedir, struct cachedesc **cd_out) {
     *cd_out = cd;
 }
 
+#undef __freopen
 #undef fail
 
 void close_cachedir(struct cachedesc **cd) {
@@ -190,6 +180,8 @@ void close_cachedir(struct cachedesc **cd) {
     } while(0)
         
 void fix_broken_cachedesc(struct cachedesc *cd) {
+    fseek(cd->fp, 0, SEEK_SET);
+
     char *lineptr = NULL;
     size_t bufsiz = 0;
     struct valid_line_list *vll_cur = NULL;
@@ -229,6 +221,7 @@ void fix_broken_cachedesc(struct cachedesc *cd) {
                         }
                     } 
                 } else if (errno) {
+                    puts(cached_abs_filepath);
                     log_error(stat);
                 }
             }     
@@ -250,6 +243,8 @@ next:
 #undef this_is_a_valid_line
 
 void fix_broken_cache(const struct cachedesc *cd) {
+    fseek(cd->fp, 0, SEEK_SET);
+
     struct dirent *dent;
 
     errno = 0;
@@ -306,11 +301,61 @@ next1:
     }
 }
 
-void update_cachedesc_with_csum(const struct cachedesc *cd, const char* md5sum_stdout) {
+void update_cachedesc_with_csum(struct cachedesc *cd, char* md5sum_stdout) {
+    fseek(cd->fp, 0, SEEK_SET);
 
+    char* new_md5csum = strtok(md5sum_stdout, " ");
+    char* new_filename = strtok(NULL, " ");
+
+    char* lineptr = NULL;
+    size_t lnsz;
+
+    long prevpos = ftell(cd->fp);
+
+    while(getline(&lineptr, &lnsz, cd->fp) != -1) {
+        char* filename = strtok(lineptr, " ");
+        if(filename) {
+            if(!strcmp(filename, new_filename)) {
+                fseek(cd->fp, prevpos, SEEK_SET);
+                goto finish;
+            }
+        }
+
+        prevpos = ftell(cd->fp);
+        free_reset_ptr(lineptr);
+    }
+
+finish:
+    free_reset_ptr(lineptr);
+    fprintf(cd->fp, "%s %s\n", new_filename, new_md5csum);
+    fix_broken_cachedesc(cd);
 }
 
-void get_csum_from_cachedesc(const struct cachedesc *cd, const char* filename) {
+int get_csum_from_cachedesc(const struct cachedesc *cd, const char* filename, char* out, size_t outsz) {
+    fseek(cd->fp, 0, SEEK_SET);
 
+    char *lineptr = NULL;
+    size_t sz;
+    int rv = 0;
+
+    while(getline(&lineptr, &sz, cd->fp) != -1) {
+        char* my_filename = strtok(lineptr, " ");
+        char* my_md5csum = strtok(NULL, " ");
+
+        if(!strcmp(my_filename, filename)) {
+            size_t md5csumlen = strlen(my_md5csum); //MD5 hash is fixed length but who knows...
+            size_t cpysz = outsz < md5csumlen ? outsz : md5csumlen;
+            memcpy(out, my_md5csum, cpysz);
+            goto finish1;
+        }
+
+        free_reset_ptr(lineptr);
+    }
+
+    rv = -1;
+
+finish1:
+    free_reset_ptr(lineptr);
+    return rv;
 }
 
