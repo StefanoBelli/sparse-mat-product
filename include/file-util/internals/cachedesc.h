@@ -7,11 +7,6 @@
 #include <linux/limits.h>
 #include "checksum.h"
 
-#define OPEN_CACHEDIR_MKDIR_FAIL -1 
-#define OPEN_CACHEDIR_OPENDIR_FAIL -2
-#define OPEN_CACHEDIR_FOPEN_FAIL -3
-#define OPEN_CACHEDIR_FREOPEN_FAIL -4
-
 struct cachedesc {
     char cachedir_path[PATH_MAX + 1];
     char cachedesc_path[PATH_MAX + 1];
@@ -19,7 +14,7 @@ struct cachedesc {
     FILE* fp;
 };
 
-int open_cachedir(const char* cachedir, struct cachedesc** cd_out);
+void open_cachedir(const char* cachedir, struct cachedesc** cd_out);
 void fix_broken_cache(const struct cachedesc*);
 void fix_broken_cachedesc(struct cachedesc*);
 void update_cachedesc_with_csum(const struct cachedesc*, const char*);

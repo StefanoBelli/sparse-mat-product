@@ -15,11 +15,9 @@ struct valid_line_list {
 };
 
 static int remove_directory_recursive(const char *path) {
-    printf("i am getting called...%s\n", path);
-
     DIR *dir = opendir(path);
     if (!dir) {
-        // opendir has failed
+        log_error(opendir);
         return -1;
     }
 
@@ -27,7 +25,6 @@ static int remove_directory_recursive(const char *path) {
 
     errno = 0;
     while ((dent = readdir(dir))) {
-        printf("lolo\n");
         if (!strcmp(dent->d_name, ".") || !strcmp(dent->d_name, "..")) {
             continue;
         }
@@ -43,33 +40,30 @@ static int remove_directory_recursive(const char *path) {
 
         struct stat statbuf;
         if (!stat(abspath, &statbuf)) {
-            puts("stat ok");
             if (S_ISDIR(statbuf.st_mode)) {
                 remove_directory_recursive(abspath);
             } else {
-                puts("remove abspath");
                 if (remove(abspath) != 0) {
-                    // remove has failed
+                    log_error(remove);
                 }
             }
         } else {
-            // stat has failed
+            log_error(stat);
         }
 
         errno = 0;
     }
 
     if(errno) {
-        // readdir has failed
+        log_error(readdir);
     }
 
     if(closedir(dir)) {
-        // closedir has failed
+        log_error(closedir);
     }
 
-    puts("remove path");
     if(remove(path)) {
-        // remove has failed
+        log_error(remove);
     }
 
     return 0;
@@ -84,11 +78,17 @@ static int has_file_ext(const char* filename, const char* ext) {
     return strcmp(dotat, ext);
 }
 
+#define __freopen(mode, ...) \
+    do { \
+        *fp = freopen(filepath, mode, *fp); \
+        if(*fp == NULL) { \
+            log_error(freopen); \
+            __VA_ARGS__; \
+        } \
+    } while(0)
+
 static void replace_file_content(const char* filepath, FILE **fp, struct valid_line_list *vll_new_head) {
-    *fp = freopen(filepath, "w", *fp);
-    if(*fp == NULL) {
-        abort();
-    }
+    __freopen("w", exit(EXIT_FAILURE));
 
     while(vll_new_head) {
         fprintf(*fp, "%s\n", vll_new_head->lineptr);
@@ -101,42 +101,47 @@ static void replace_file_content(const char* filepath, FILE **fp, struct valid_l
         free_reset_ptr(bak);
     }
 
-    fflush(*fp);
+    if(fflush(*fp)) {
+        log_error(fflush);
+    }
 
-    *fp = freopen(filepath, "r", *fp);
+    __freopen("r");
 }
 
-#define check_failure(ptr, rv) \
+#undef __freopen
+
+#define fail(fn) \
     do { \
-        if(ptr == NULL) { \
-            int bak_errno = errno; \
-            free(cd); \
-            cd = NULL; \
-            errno = bak_errno; \
-            return rv; \
-        } \
+        log_error(fn); \
+        free_reset_ptr(cd); \
+        exit(EXIT_FAILURE); \
     } while(0)
 
-int open_cachedir(const char *cachedir, struct cachedesc **cd_out) {
+void open_cachedir(const char *cachedir, struct cachedesc **cd_out) {
     struct cachedesc *cd = checked_malloc(struct cachedesc, 1);
 
     if(mkdir(cachedir, 0755) == -1 && errno != EEXIST) {
-        free_reset_ptr(cd);
-        return OPEN_CACHEDIR_MKDIR_FAIL;
+        fail(mkdir);
     }
 
     DIR* dir = opendir(cachedir);
-    check_failure(dir, OPEN_CACHEDIR_OPENDIR_FAIL);
+    if(dir == NULL) {
+        fail(opendir);
+    }
 
     char cachedesc_filename[PATH_MAX + 1];
     memset(cachedesc_filename, 0, PATH_MAX + 1);
     snprintf(cachedesc_filename, PATH_MAX, "%s/cachedesc", cachedir);
 
     FILE* fp = fopen(cachedesc_filename, "a");
-    check_failure(fp, OPEN_CACHEDIR_FOPEN_FAIL);
+    if(fp == NULL) {
+        fail(fopen);
+    }
     
     fp = freopen(cachedesc_filename, "r", fp);
-    check_failure(fp, OPEN_CACHEDIR_FOPEN_FAIL);
+    if(fp == NULL) {
+        fail(freopen);
+    }
 
     memset(cd->cachedir_path, 0, PATH_MAX + 1);
     memcpy(cd->cachedir_path, cachedir, strlen(cachedir));
@@ -147,19 +152,17 @@ int open_cachedir(const char *cachedir, struct cachedesc **cd_out) {
     cd->cachedir = dir;
     cd->fp = fp;
     *cd_out = cd;
-
-    return 0;
 }
 
-#undef check_failure
+#undef fail
 
 void close_cachedir(struct cachedesc **cd) {
     if(closedir((*cd)->cachedir)) {
-        // closedir has failed
+        log_error(closedir);
     }
 
     if(fclose((*cd)->fp)) {
-        // fclose has failed
+        log_error(fclose);
     }
 
     free_reset_ptr(*cd);
@@ -225,6 +228,8 @@ void fix_broken_cachedesc(struct cachedesc *cd) {
                             }
                         }
                     } 
+                } else if (errno) {
+                    log_error(stat);
                 }
             }     
         }
@@ -280,13 +285,15 @@ void fix_broken_cache(const struct cachedesc *cd) {
                     }
                 }
             }
+        } else if(errno) {
+            log_error(stat);
         }
 
         if(remove(abspath)) {
             if(S_ISDIR(statbuf.st_mode)) {
                 remove_directory_recursive(abspath);
             } else {
-                //remove has failed
+                log_error(remove);
             }
         }
 
@@ -295,7 +302,7 @@ next1:
     }
 
     if(errno) {
-        //readdir has failed
+        log_error(readdir);
     }
 }
 

@@ -2,9 +2,9 @@
 
 int main() {
     struct cachedesc *cd;
-    int res = open_cachedir("./cachedir", &cd);
+    open_cachedir("./cachedir", &cd);
 
-    printf("res = %d, ptr = %p\n", res, cd);
+    printf("ptr = %p\n", cd);
 
     fix_broken_cachedesc(cd);
     fix_broken_cache(cd);
