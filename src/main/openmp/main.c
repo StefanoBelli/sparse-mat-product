@@ -7,6 +7,9 @@ int main() {
     printf("res = %d, ptr = %p\n", res, cd);
 
     fix_broken_cachedesc(cd);
+    fix_broken_cache(cd);
+
+    puts("fix broken cache");
 
     close_cachedir(&cd);
 
