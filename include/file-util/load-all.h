@@ -1,5 +1,5 @@
-#ifndef CHECK_FILES_H
-#define CHECK_FILES_H
+#ifndef LOAD_ALL_FILE_UTIL_H
+#define LOAD_ALL_FILE_UTIL_H
 
 #include <stdio.h>
 
