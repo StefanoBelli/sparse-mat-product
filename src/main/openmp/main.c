@@ -8,5 +8,7 @@ int main() {
 
     fix_broken_cachedesc(cd);
 
+    close_cachedir(&cd);
+
     return 0;
 }

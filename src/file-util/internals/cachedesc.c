@@ -91,8 +91,10 @@ int open_cachedir(const char *cachedir, struct cachedesc **cd_out) {
 
 #undef check_failure
 
-void close_cachedir(const struct cachedesc *cd) {
-
+void close_cachedir(const struct cachedesc **cd) {
+    closedir((*cd)->cachedir);
+    fclose((*cd)->fp);
+    free_reset_ptr(*cd);
 }
 
 #define add_valid_line(lnptr) \
@@ -160,6 +162,8 @@ void fix_broken_cachedesc(struct cachedesc *cd) {
 next:
         lineptr = NULL;
     }
+
+    free_reset_ptr(lineptr);    
 
     replace_file_content(cd->cachedesc_path, &cd->fp, vll_head);
     vll_cur = NULL;
