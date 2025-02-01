@@ -91,6 +91,10 @@ int open_cachedir(const char *cachedir, struct cachedesc **cd_out) {
 
 #undef check_failure
 
+void close_cachedir(const struct cachedesc *cd) {
+
+}
+
 #define add_valid_line(lnptr) \
     do { \
         struct valid_line_list* curln = checked_malloc(struct valid_line_list, 1); \
@@ -133,14 +137,14 @@ void fix_broken_cachedesc(struct cachedesc *cd) {
 
                 struct stat statbuf; 
                 if(!stat(cached_abs_filepath, &statbuf) && S_ISREG(statbuf.st_mode)) {
-                    if(has_file_ext(cached_filename, ".mtx")) {
+                    if(!has_file_ext(cached_filename, ".mtx")) {
                         cached_filename_endptr[0] = ' ';
                         add_valid_line(lineptr);
                         goto next;
                     } else {
-                        if(has_file_ext(cached_filename, ".gz")) {
+                        if(!has_file_ext(cached_filename, ".gz")) {
                             cached_filename_endptr[-3] = 0;
-                            if(has_file_ext(cached_filename, ".tar")) {
+                            if(!has_file_ext(cached_filename, ".tar")) {
                                 cached_filename_endptr[-3] = '.';
                                 cached_filename_endptr[0] =  ' ';
                                 add_valid_line(lineptr);
@@ -168,10 +172,10 @@ void fix_broken_cache(const struct cachedesc *cd) {
 
 }
 
-void update_cachedesc_with_csum(const struct cachedesc *cd, const char* filename, const char* csum) {
+void update_cachedesc_with_csum(const struct cachedesc *cd, const char* md5sum_stdout) {
 
 }
 
-void close_cachedir(const struct cachedesc *cd) {
+void get_csum_from_cachedesc(const struct cachedesc *cd, const char* filename) {
 
 }
