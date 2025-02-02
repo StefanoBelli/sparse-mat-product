@@ -13,6 +13,14 @@
     }; ptr; \
 })
 
+#define checked_realloc(pt, ty, ne) ({ \
+    ty* ptr = (ty*) realloc(pt, sizeof(ty) * ne); \
+    if(ptr == NULL) { \
+        log_error(realloc); \
+        exit(EXIT_FAILURE); \
+    }; ptr; \
+})
+
 #define free_reset_ptr(ptr) \
     do { \
         free(ptr); \

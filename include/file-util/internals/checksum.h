@@ -1,4 +1,0 @@
-#ifndef CHECKSUM_FILE_UTIL_H
-#define CHECKSUM_FILE_UTIL_H
-
-#endif

@@ -5,7 +5,8 @@
 #include<dirent.h>
 #include<sys/stat.h>
 #include<utils.h>
-#include<file-util/internals/cachedesc.h>
+#include<file-util/tracking/cachedesc.h>
+#include<file-util/utils.h>
 
 extern int errno;
 
@@ -67,15 +68,6 @@ static int remove_directory_recursive(const char *path) {
     }
 
     return 0;
-}
-
-static int has_file_ext(const char* filename, const char* ext) {
-    char *dotat = strrchr(filename, '.');
-    if(dotat == NULL) {
-        return 1;
-    }
-
-    return strcmp(dotat, ext);
 }
 
 #define __freopen(__path, __mode, __fp) \
@@ -188,9 +180,9 @@ void fix_broken_cachedesc(struct cachedesc *cd) {
     struct valid_line_list *vll_head = NULL;
 
     while(getline(&lineptr, &bufsiz, cd->fp) != -1) {
-        int linelen = strlen(lineptr);
-        if(lineptr[linelen - 1] == '\n') {
-            lineptr[linelen - 1] = 0;
+        fix_trailing_nls(lineptr, strlen(lineptr));
+        if(stroprnt(lineptr)) {
+            goto next_ignore;
         }
 
         char* cached_filename = strtok(lineptr, " ");
@@ -220,13 +212,13 @@ void fix_broken_cachedesc(struct cachedesc *cd) {
                             }
                         }
                     } 
-                } else if (errno) {
-                    puts(cached_abs_filepath);
+                } else if (errno != ENOENT) {
                     log_error(stat);
                 }
             }     
         }
 
+next_ignore:
         free(lineptr);
 next:
         lineptr = NULL;
