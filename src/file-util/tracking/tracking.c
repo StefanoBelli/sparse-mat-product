@@ -3,6 +3,7 @@
 #include <utils.h>
 #include <file-util/tracking/tracking.h>
 #include <file-util/tracking/utils.h>
+#include <file-util/tracking/cachedesc.h>
 
 struct parsed_input_string {
     char *group;
@@ -95,6 +96,50 @@ void free_tracking_files(struct tracking_files **tf) {
     free_reset_ptr(*tf);
 }
 
-int track_files(struct tracking_files *tf) {
+int track_files(const char* mtxfilesdir, struct tracking_files *tf) {
+    struct cachedesc *cd;
+    open_cachedir(mtxfilesdir, &cd);
 
+    // make sure this ordering is right
+    fix_broken_cache(cd);
+    fix_broken_cachedesc(cd);
+
+    //make outer loop iterating through tracking files
+    
+    struct dirent *dent;
+
+    rewinddir(cd->cachedir);
+    
+    errno = 0;
+    while((dent = readdir(cd->cachedir))) {
+        // no "cachedesc" file from checking
+
+        /*
+        if file.mtx exists and checksum exists and checksum matches {
+            pass
+        }
+        else if file.tar.gz exists and checksum exists and checksum matches {
+            decompress, extract archive
+            calculate md5sum of mtx file
+            store md5sum of mtx file in cachedesc
+            pass
+        }
+        else {
+            download file.tar.gz from internet
+            calculate md5sum of tar.gz file
+            store md5sum of tar.gz file in cachedesc
+            decompress, extract archive
+            calculate md5sum of mtx file
+            store md5sum of mtx file in cachedesc
+            pass
+        }
+        */
+        errno = 0;
+    }
+
+    if(errno) {
+        // readdir has failed
+    }
+
+    close_cachedir(&cd);
 }

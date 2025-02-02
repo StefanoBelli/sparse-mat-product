@@ -8,8 +8,6 @@
 #include<file-util/tracking/cachedesc.h>
 #include<file-util/tracking/utils.h>
 
-extern int errno;
-
 struct valid_line_list {
     char* lineptr;
     struct valid_line_list *next;
@@ -238,6 +236,8 @@ void fix_broken_cache(const struct cachedesc *cd) {
     fseek(cd->fp, 0, SEEK_SET);
 
     struct dirent *dent;
+
+    rewinddir(cd->cachedir);
 
     errno = 0;
     while((dent = readdir(cd->cachedir))) {

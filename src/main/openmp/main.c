@@ -5,6 +5,7 @@
 #include<string.h>
 
 int main(int ac, char** argv) {
+    /*
     struct cachedesc *cd;
     open_cachedir("./cachedir", &cd);
 
@@ -45,4 +46,5 @@ int main(int ac, char** argv) {
    free_tracking_files(&tf);
 
     return 0;
+    */
 }

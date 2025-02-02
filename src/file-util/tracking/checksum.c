@@ -20,24 +20,20 @@ int md5sum(const char *filename, struct md5 *out) {
         return -1;
     }
 
-    char checksum_as_str_stdout[33];
-    memset(checksum_as_str_stdout, 0, 33);
-    fgets(checksum_as_str_stdout, 32, f);
+    memset(out->checksum, 0, MD5_CHECKSUM_LEN + 1);
+    fgets(out->checksum, MD5_CHECKSUM_LEN, f);
 
-    if(pclose(f) != 0) {
-        free_reset_ptr(cmdline);
-        return -1;
-    }
-
-    memcpy(out->md5, checksum_as_str_stdout, 33);
-
-    size_t fake_stdoutlen = filenamelen + 2 + 32; 
-    char* fake_stdout = checked_malloc(char, fake_stdoutlen + 1);
-    memset(fake_stdout, 0, fake_stdoutlen + 1);
-    snprintf(fake_stdout, fake_stdoutlen, "%s  %s", checksum_as_str_stdout, filename);
-
-    out->md5sum_output = fake_stdout;
+    int rv = pclose(f) ? -1 : 0;
 
     free_reset_ptr(cmdline);
-    return 0;
+    return rv;
+}
+
+char* rebuild_md5sum_stdout(const char* filename, struct md5* md5) {
+    size_t fake_stdoutlen = strlen(filename) + 2 + MD5_CHECKSUM_LEN; 
+    char* fake_stdout = checked_malloc(char, fake_stdoutlen + 1);
+    memset(fake_stdout, 0, fake_stdoutlen + 1);
+    snprintf(fake_stdout, fake_stdoutlen, "%s  %s", md5->checksum, filename);
+
+    return fake_stdout;
 }
