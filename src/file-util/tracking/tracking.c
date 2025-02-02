@@ -29,7 +29,7 @@ int parse_input_string(const char* is, struct parsed_input_string* out) {
     }
 
     char* name = strtok(NULL, " ");
-    if(group == NULL) {
+    if(name == NULL) {
         free_reset_ptr(my_is);
         return -1;
     }

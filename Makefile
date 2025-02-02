@@ -1,6 +1,6 @@
 SHELL=/bin/sh
 
-valid_build_types = release both-debug host-debug device-debug host-debug-device-profile device-profile
+valid_build_types = release host-sanitize both-debug host-debug device-debug host-debug-device-profile device-profile
 BUILD_TYPE ?= release
 
 ifneq ($(filter $(BUILD_TYPE), $(valid_build_types)),)
@@ -23,6 +23,7 @@ CC_CFLAGS=-std=c11
 NVCC_CFLAGS=-Xptxas="--verbose --warn-on-double-precision-use --warn-on-local-memory-usage --warn-on-spills"
 NVCC_CC_CFLAGS=
 LINK_LIBS=
+SANITIZERS=
 
 ifeq ($(BUILD_TYPE), release)
 	CFLAGS += -O3
@@ -40,6 +41,14 @@ else ifeq ($(BUILD_TYPE), host-debug-device-profile)
 else ifeq ($(BUILD_TYPE), device-profile)
 	CFLAGS += -O3
 	NVCC_CFLAGS += --generate-line-info --source-in-ptx
+else ifeq ($(BUILD_TYPE), host-sanitize)
+	SANITIZERS= \
+		-fsanitize=address \
+		-fsanitize=leak \
+		-fsanitize=undefined \
+		-fsanitize=pointer-compare \
+		-fsanitize=pointer-subtract
+	CFLAGS += -g -O0 $(SANITIZERS)
 endif
 
 COMMON_SRC_FILES := $(shell find ./src/ -type f -name '*.c' -not -path "./src/main*")
@@ -75,6 +84,7 @@ openmp: common $(OPENMP_SPECIFIC_OBJ_FILES)
 		$(COMMON_OBJ_FILES) \
 		$(OPENMP_SPECIFIC_OBJ_FILES) \
 		$(LINK_LIBS) \
+		$(SANITIZERS) \
 		-o $(ELF_OUT_OPENMP)
 	@printf '\tELF $(ELF_OUT_OPENMP)\n'
 
@@ -86,6 +96,7 @@ cuda: common $(CUDA_C_SPECIFIC_OBJ_FILES) $(CUDA_CU_SPECIFIC_OBJ_FILES)
 		$(CUDA_C_SPECIFIC_OBJ_FILES) \
 		$(CUDA_CU_SPECIFIC_OBJ_FILES) \
 		$(LINK_LIBS) \
+		-Xcompiler="$(SANITIZERS)" \
 		-o $(ELF_OUT_CUDA)
 	@printf '\tELF $(ELF_OUT_CUDA)\n'
 
@@ -120,7 +131,28 @@ $(OPENMP_SPECIFIC_OBJ_FILES): %.o: %.c
  
 $(CUDA_CU_SPECIFIC_OBJ_FILES): %.o: %.cu
 	@printf '\tCC $<\n'
-	@$(NVCC) $(NVCC_CFLAGS) -Xcompiler="$(CFLAGS) $(NVCC_CC_CFLAGS)" $< -c -o $@
+	@$(NVCC) $(NVCC_CFLAGS) -Xcompiler="$(CFLAGS) $(NVCC_CC_CFLAGS)" -c $< -o $@
+
+cppcheck:
+	cppcheck \
+		--enable=all \
+		--disable=unusedFunction,missingInclude \
+		--library=posix \
+		--platform=unix64 \
+		--std=c11 \
+		--force \
+		--language=c  \
+		-i src/matrix/matrix-market/mmio.c \
+		--suppress=*:src/matrix/matrix-market/mmio.h \
+		--suppress=*:/usr/* \
+		src \
+		include \
+		-Iinclude \
+		-I/usr/include \
+		-I/usr/local/include \
+		-I/usr/include/x86_64-linux-gnu \
+		-I/usr/lib/gcc/x86_64-linux-gnu/13/include \
+		--quiet
 
 help:
 	@echo ----help----
