@@ -1,7 +1,7 @@
 #ifndef MATRICES_H
 #define MATRICES_H
 
-const char *matrices[] = {
+const char *const matrices[] = {
     "vanHeukelum cage4",
     "Bai mhda416",
     "HB mcfe",

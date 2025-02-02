@@ -1,8 +1,8 @@
 #include <string.h>
 #include <matrices.h>
-#include <file-util/tracking/tracking.h>
-#include <file-util/utils.h>
 #include <utils.h>
+#include <file-util/tracking/tracking.h>
+#include <file-util/tracking/utils.h>
 
 struct parsed_input_string {
     char *group;
@@ -85,7 +85,7 @@ struct tracking_files *add_file_to_track(const char* s) {
     return NULL;
 }
 
-void free_tracking_files(struct tracking_files** tf) {
+void free_tracking_files(struct tracking_files **tf) {
     for(int i = 0; i < (*tf)->len; i++) {
         free_reset_ptr((*tf)->m[i].group_name);
         free_reset_ptr((*tf)->m[i].file_name);
@@ -95,6 +95,6 @@ void free_tracking_files(struct tracking_files** tf) {
     free_reset_ptr(*tf);
 }
 
-int track_files(struct tracking_files*) {
+int track_files(struct tracking_files *tf) {
 
 }
