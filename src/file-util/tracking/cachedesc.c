@@ -173,7 +173,6 @@ void fix_broken_cachedesc(struct cachedesc *cd) {
 
         char* cached_filename = strtok(lineptr, " ");
         if(cached_filename != NULL) {
-            char* cached_filename_endptr = cached_filename + strlen(cached_filename);
             char* cached_checksum = strtok(NULL, " ");
             if(cached_checksum != NULL) {
                 char cached_abs_filepath[PATH_MAX + 1];
@@ -186,6 +185,7 @@ void fix_broken_cachedesc(struct cachedesc *cd) {
                 errno = 0;
                 struct stat statbuf; 
                 if(!stat(cached_abs_filepath, &statbuf) && S_ISREG(statbuf.st_mode)) {
+                    char* cached_filename_endptr = cached_filename + strlen(cached_filename);
                     if(!has_file_ext(cached_filename, ".mtx")) {
                         this_is_a_valid_line();
                     } else {

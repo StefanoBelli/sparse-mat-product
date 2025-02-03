@@ -36,11 +36,11 @@ static inline int stroprnt(const char* s) {
 }
 
 static inline void fix_trailing_nls(char* s, size_t slen) {
-    if(s[slen - 1] == '\n') {
+    if(slen >= 1 && s[slen - 1] == '\n') {
         s[slen - 1] = 0;
     }
-    
-    if(s[slen - 2] == '\r') {
+
+    if(slen >= 2 && s[slen - 2] == '\r') {
         s[slen - 2] = ' '; //strtok will take care
     }
 }

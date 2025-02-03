@@ -161,9 +161,6 @@ struct do_extract_args {
 };
 
 static void do_extract(const struct do_extract_args *args) {
-    printf("\nextracting %s...", args->mtxname);
-    fflush(stdout);
-
     if (extract_mtx(args->mtxname, args->cdpath)) {
         log_warn("tar failed for %s", args->mtxname);
     } else {
@@ -183,9 +180,6 @@ struct do_download_args {
 };
 
 static void do_download_and_extract(const struct do_download_args *args) {
-    printf("\ndownloading %s...", args->mtxname);
-    fflush(stdout);
-
     if (download_mtx(args->groupname, args->mtxname, args->cdpath)) {
         log_warn("curl failed for %s", args->mtxname);
     } else {
@@ -256,7 +250,7 @@ void track_files(const char* mtxfilesdir, struct tracking_files *tf) {
                 do_extract(&a);
             }
         }
-        
+
         int curnumprnt = 0; 
         printf("checked mtx files from %s: %s (%d/%d)%n", 
             cdpath, mtxname, i + 1, tf->len, &curnumprnt);
