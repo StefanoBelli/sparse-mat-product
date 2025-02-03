@@ -1,4 +1,5 @@
 #include <string.h>
+#include <math.h>
 #include <utils.h>
 #include <file-util/tracking/tracking.h>
 #include <file-util/tracking/utils.h>
@@ -104,9 +105,7 @@ static int file_exists(const char* path) {
 }
 
 static int valid_file(struct cachedesc *cd, const char* filepath, const char* filename) {
-    printf("checking if file %s exists...\n", filepath);
     if(file_exists(filepath)) {
-        printf("%s does exist\n", filepath);
         char *checksum;
         if(get_csum_from_cachedesc(cd, filename, &checksum)) {
             return -1;
@@ -117,11 +116,6 @@ static int valid_file(struct cachedesc *cd, const char* filepath, const char* fi
             free_reset_ptr(checksum);
             return -1;
         }
-
-        puts(filename);
-        puts(checksum);
-        puts(calculated_md5.checksum);
-        puts("");
 
         int res = strcmp(checksum, calculated_md5.checksum);
         free_reset_ptr(checksum);
@@ -144,10 +138,10 @@ static void initialize_filename_bufs(
 #pragma GCC diagnostic pop
 }
 
-static int calc_and_store_md5(struct cachedesc* cd, const char *filepath, const char *filename) {
+static int calc_and_store_md5(struct cachedesc* cd, const char *filepath, const char *filename, const char* mtxname) {
     struct md5 calculated_md5;
     if (md5sum(filepath, &calculated_md5)) {
-        //log, ignore, proceed
+        log_warn("md5sum failed for %s", mtxname);
         return -1;
     }
 
@@ -167,10 +161,13 @@ struct do_extract_args {
 };
 
 static void do_extract(const struct do_extract_args *args) {
+    printf("\nextracting %s...", args->mtxname);
+    fflush(stdout);
+
     if (extract_mtx(args->mtxname, args->cdpath)) {
-        // log, ignore, proceed
+        log_warn("tar failed for %s", args->mtxname);
     } else {
-        calc_and_store_md5(args->cd, args->filepath_mtx, args->file_mtx);
+        calc_and_store_md5(args->cd, args->filepath_mtx, args->file_mtx, args->mtxname);
     }
 }
 
@@ -186,10 +183,13 @@ struct do_download_args {
 };
 
 static void do_download_and_extract(const struct do_download_args *args) {
+    printf("\ndownloading %s...", args->mtxname);
+    fflush(stdout);
+
     if (download_mtx(args->groupname, args->mtxname, args->cdpath)) {
-        // log, ignore, proceed
+        log_warn("curl failed for %s", args->mtxname);
     } else {
-        if (!calc_and_store_md5(args->cd, args->filepath_targz, args->file_targz)) {
+        if (!calc_and_store_md5(args->cd, args->filepath_targz, args->file_targz, args->mtxname)) {
             struct do_extract_args a;
             a.mtxname = args->mtxname;
             a.filepath_mtx = args->filepath_mtx;
@@ -230,9 +230,8 @@ void track_files(const char* mtxfilesdir, struct tracking_files *tf) {
     fix_broken_cachedesc(cd);
     fix_broken_cache(cd);
 
+    int numprnt = 0;
     for (int i = 0; i < tf->len; i++) {
-        puts("---------");
-
         const char* mtxname = tf->m[i].file_name;
         const char* groupname = tf->m[i].group_name;
 
@@ -242,11 +241,6 @@ void track_files(const char* mtxfilesdir, struct tracking_files *tf) {
         initialize_filename_bufs(
             file_mtx, filepath_mtx, mtxname, cdpath, "mtx");
 
-        puts(file_mtx);
-        puts(filepath_mtx);
-        puts(mtxname);
-        puts(cdpath);
-
         if(valid_file(cd, filepath_mtx, file_mtx)) {
             char file_targz[PATH_MAX + 1];
             char filepath_targz[PATH_MAX + 1];
@@ -254,19 +248,30 @@ void track_files(const char* mtxfilesdir, struct tracking_files *tf) {
             initialize_filename_bufs(
                 file_targz, filepath_targz, mtxname, cdpath, "tar.gz");
 
-        puts(file_targz);
-        puts(filepath_targz);
-        puts(mtxname);
-        puts(cdpath);
             if(valid_file(cd, filepath_targz, file_targz)) {
-                puts("downloading...");
                 INIT_DO_DOWNLOAD_ARGS(a);
                 do_download_and_extract(&a); 
             } else {
-                puts("extracting...");
                 INIT_DO_EXTRACT_ARGS(a);
                 do_extract(&a);
             }
+        }
+        
+        int curnumprnt = 0; 
+        printf("checked mtx files from %s: %s (%d/%d)%n", 
+            cdpath, mtxname, i + 1, tf->len, &curnumprnt);
+
+        for (int j = 0; j < abs(numprnt - curnumprnt); j++) {
+            putc(' ', stdout);
+        }
+
+        numprnt = curnumprnt;
+
+        if(i == tf->len - 1) {
+            puts("");
+        } else {
+            putc('\r', stdout);
+            fflush(stdout);
         }
     }
 
