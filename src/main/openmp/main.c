@@ -50,6 +50,7 @@ int main(int ac, char** argv) {
    free_tracking_files(&tf);
 
     return 0;
+    */
 
    if(mkcachedir("./cachedi")) {
         puts("mkcachedir failed");
@@ -61,10 +62,24 @@ int main(int ac, char** argv) {
         puts("download ok");
    }
 
+   struct md5 targz_md5;
+   if(md5sum("./cachedi/mcfe.tar.gz", &targz_md5)) {
+     puts("gone wrong... md5sum");
+   } else {
+     puts(targz_md5.checksum);
+   }
+
    if(extract_mtx("mcfe", "./cachedi")) {
         puts("gone wrong...extract");
    } else {
         puts("extract ok");
    }
-   */
+   
+   struct md5 mtx_md5;
+   if(md5sum("./cachedi/mcfe.mtx", &mtx_md5)) {
+     puts("gone wrong... md5sum");
+   } else {
+     puts(mtx_md5.checksum);
+   }
+
 }

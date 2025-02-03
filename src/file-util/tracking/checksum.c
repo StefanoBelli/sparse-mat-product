@@ -23,7 +23,7 @@ int md5sum(const char *filename, struct md5 *out) {
     }
 
     memset(out->checksum, 0, MD5_CHECKSUM_LEN + 1);
-    fgets(out->checksum, MD5_CHECKSUM_LEN, f);
+    fgets(out->checksum, MD5_CHECKSUM_LEN + 1, f);
 
     int exitcode = pclose(f);
     free_reset_ptr(cmdline);
