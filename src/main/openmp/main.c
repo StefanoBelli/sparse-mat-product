@@ -6,8 +6,9 @@
 #include<file-util/tracking/utils.h>
 #include<utils.h>
 #include<string.h>
+#include<matrices.h>
 
-int main(int ac, char** argv) {
+int main(/*int ac, char** argv*/) {
 
     /*
     struct cachedesc *cd;
@@ -52,10 +53,25 @@ int main(int ac, char** argv) {
     return 0;
     */
 
+   errno = 0; //needed for mkcachedir
    if(mkcachedir("./cachedi")) {
         puts("mkcachedir failed");
    }
 
+   size_t initial_size = sizeof(matrices) / sizeof(char*);
+
+   for(size_t i = 0; i < initial_size; ++i) {
+     add_file_to_track(matrices[i], initial_size);
+   }
+   
+   struct tracking_files *tf = add_file_to_track(NULL, 0);
+
+   track_files("./cachedi", tf);
+
+   free_tracking_files(&tf); 
+
+   //track_files("./cachedi", )
+   /*
    if(download_mtx("HB", "mcfe", "./cachedi")) {
         puts("gone wrong...download");
    } else {
@@ -80,6 +96,6 @@ int main(int ac, char** argv) {
      puts("gone wrong... md5sum");
    } else {
      puts(mtx_md5.checksum);
-   }
+   }*/
 
 }

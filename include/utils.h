@@ -33,4 +33,10 @@
 #define log_error(msg) \
     printf("ERROR [" __FILE__ ":" to_s(__LINE__) "] %s - " #msg ": %s\n", __func__, strerror(errno))
 
+#define log_warn(fmt, ...) \
+    printf("WARNING [" __FILE__ ":" to_s(__LINE__) "] %s - " fmt "\n", __func__, __VA_ARGS__)
+
+#define log_warn_simple(msg) \
+    printf("WARNING [" __FILE__ ":" to_s(__LINE__) "] %s - " msg "\n", __func__)
+
 #endif

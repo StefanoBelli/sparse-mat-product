@@ -8,6 +8,6 @@ struct md5 {
 };
 
 int md5sum(const char* filename, struct md5* out);
-char* rebuild_md5sum_stdout(const char* filename, struct md5* md5);
+char* rebuild_md5sum_stdout(const char* filename, const struct md5* md5);
 
 #endif

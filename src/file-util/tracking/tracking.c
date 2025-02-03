@@ -1,9 +1,10 @@
 #include <string.h>
-#include <matrices.h>
 #include <utils.h>
 #include <file-util/tracking/tracking.h>
 #include <file-util/tracking/utils.h>
 #include <file-util/tracking/cachedesc.h>
+#include <file-util/tracking/extract-mtx.h>
+#include <file-util/tracking/download-mtx.h>
 
 struct parsed_input_string {
     char *group;
@@ -51,7 +52,7 @@ int parse_input_string(const char* is, struct parsed_input_string* out) {
     return 0;
 }
 
-struct tracking_files *add_file_to_track(const char* s) {
+struct tracking_files *add_file_to_track(const char* s, size_t initial_size) {
     static struct tracking_files *current = NULL;
 
     if(s == NULL) {
@@ -62,15 +63,15 @@ struct tracking_files *add_file_to_track(const char* s) {
     }
 
     if(current == NULL) {
-        size_t dflsize = sizeof(matrices) / sizeof(char*);
         current = checked_malloc(struct tracking_files, 1);
-        current->m = checked_malloc(struct tracked_file_name, dflsize);
+        current->m = checked_malloc(struct tracked_file_name, initial_size);
         current->len = 0;
-        current->cap = dflsize;
+        current->cap = initial_size;
     }
 
     struct parsed_input_string pis;
     if(parse_input_string(s, &pis)) {
+        log_warn_simple("unable to parse input string");
         return (struct tracking_files*) -1;
     }
 
@@ -96,50 +97,181 @@ void free_tracking_files(struct tracking_files **tf) {
     free_reset_ptr(*tf);
 }
 
-int track_files(const char* mtxfilesdir, struct tracking_files *tf) {
+static int file_exists(const char* path) {
+    errno = 0;
+    struct stat statbuf;
+    return !stat(path, &statbuf) && errno != ENOENT && S_ISREG(statbuf.st_mode);
+}
+
+static int valid_file(struct cachedesc *cd, const char* filepath, const char* filename) {
+    printf("checking if file %s exists...\n", filepath);
+    if(file_exists(filepath)) {
+        printf("%s does exist\n", filepath);
+        char *checksum;
+        if(get_csum_from_cachedesc(cd, filename, &checksum)) {
+            return -1;
+        }
+
+        struct md5 calculated_md5;
+        if(md5sum(filepath, &calculated_md5)) {
+            free_reset_ptr(checksum);
+            return -1;
+        }
+
+        puts(filename);
+        puts(checksum);
+        puts(calculated_md5.checksum);
+        puts("");
+
+        int res = strcmp(checksum, calculated_md5.checksum);
+        free_reset_ptr(checksum);
+        return res;
+    }
+
+    return -1;
+}
+
+static void initialize_filename_bufs(
+        char* file_buf, 
+        char* filepath_buf, 
+        const char* mtxname, 
+        const char* cachedirpath, 
+        const char* ext) {
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-truncation"
+    snprintf(file_buf, PATH_MAX + 1, "%s.%s", mtxname, ext);
+    snprintf(filepath_buf, PATH_MAX + 1, "%s/%s.%s", cachedirpath, mtxname, ext);
+#pragma GCC diagnostic pop
+}
+
+static int calc_and_store_md5(struct cachedesc* cd, const char *filepath, const char *filename) {
+    struct md5 calculated_md5;
+    if (md5sum(filepath, &calculated_md5)) {
+        //log, ignore, proceed
+        return -1;
+    }
+
+    char *md5stdout = rebuild_md5sum_stdout(filename, &calculated_md5);
+    update_cachedesc_with_csum(cd, md5stdout);
+    free_reset_ptr(md5stdout);
+
+    return 0;
+}
+
+struct do_extract_args {
+    const char* mtxname;
+    const char* filepath_mtx;
+    const char* file_mtx;
+    const char* cdpath;
+    struct cachedesc* cd;
+};
+
+static void do_extract(const struct do_extract_args *args) {
+    if (extract_mtx(args->mtxname, args->cdpath)) {
+        // log, ignore, proceed
+    } else {
+        calc_and_store_md5(args->cd, args->filepath_mtx, args->file_mtx);
+    }
+}
+
+struct do_download_args {
+    const char* mtxname;
+    const char* groupname;
+    const char* filepath_targz;
+    const char* filepath_mtx;
+    const char* file_targz;
+    const char* file_mtx;
+    const char* cdpath;
+    struct cachedesc* cd;
+};
+
+static void do_download_and_extract(const struct do_download_args *args) {
+    if (download_mtx(args->groupname, args->mtxname, args->cdpath)) {
+        // log, ignore, proceed
+    } else {
+        if (!calc_and_store_md5(args->cd, args->filepath_targz, args->file_targz)) {
+            struct do_extract_args a;
+            a.mtxname = args->mtxname;
+            a.filepath_mtx = args->filepath_mtx;
+            a.file_mtx = args->file_mtx;
+            a.cdpath = args->cdpath;
+            a.cd = args->cd;
+            do_extract(&a);
+        }
+    }
+}
+
+#define INIT_DO_EXTRACT_ARGS(_name) \
+    struct do_extract_args _name; \
+    _name.mtxname = mtxname; \
+    _name.filepath_mtx = filepath_mtx; \
+    _name.file_mtx = file_mtx; \
+    _name.cdpath = cdpath; \
+    _name.cd = cd
+
+#define INIT_DO_DOWNLOAD_ARGS(_name) \
+    struct do_download_args _name; \
+    _name.mtxname = mtxname; \
+    _name.filepath_mtx = filepath_mtx; \
+    _name.file_mtx = file_mtx; \
+    _name.cdpath = cdpath; \
+    _name.cd = cd; \
+    _name.groupname = groupname; \
+    _name.filepath_targz = filepath_targz; \
+    _name.file_targz = file_targz
+
+void track_files(const char* mtxfilesdir, struct tracking_files *tf) {
     struct cachedesc *cd;
     open_cachedir(mtxfilesdir, &cd);
 
+    const char* cdpath = cd->cachedir_path;
+
     // make sure this ordering is right
-    fix_broken_cache(cd);
     fix_broken_cachedesc(cd);
+    fix_broken_cache(cd);
 
-    //make outer loop iterating through tracking files
-    
-    struct dirent *dent;
+    for (int i = 0; i < tf->len; i++) {
+        puts("---------");
 
-    rewinddir(cd->cachedir);
-    
-    errno = 0;
-    while((dent = readdir(cd->cachedir))) {
-        // no "cachedesc" file from checking
+        const char* mtxname = tf->m[i].file_name;
+        const char* groupname = tf->m[i].group_name;
 
-        /*
-        if file.mtx exists and checksum exists and checksum matches {
-            pass
+        char file_mtx[PATH_MAX + 1];
+        char filepath_mtx[PATH_MAX + 1];
+
+        initialize_filename_bufs(
+            file_mtx, filepath_mtx, mtxname, cdpath, "mtx");
+
+        puts(file_mtx);
+        puts(filepath_mtx);
+        puts(mtxname);
+        puts(cdpath);
+
+        if(valid_file(cd, filepath_mtx, file_mtx)) {
+            char file_targz[PATH_MAX + 1];
+            char filepath_targz[PATH_MAX + 1];
+            
+            initialize_filename_bufs(
+                file_targz, filepath_targz, mtxname, cdpath, "tar.gz");
+
+        puts(file_targz);
+        puts(filepath_targz);
+        puts(mtxname);
+        puts(cdpath);
+            if(valid_file(cd, filepath_targz, file_targz)) {
+                puts("downloading...");
+                INIT_DO_DOWNLOAD_ARGS(a);
+                do_download_and_extract(&a); 
+            } else {
+                puts("extracting...");
+                INIT_DO_EXTRACT_ARGS(a);
+                do_extract(&a);
+            }
         }
-        else if file.tar.gz exists and checksum exists and checksum matches {
-            decompress, extract archive
-            calculate md5sum of mtx file
-            store md5sum of mtx file in cachedesc
-            pass
-        }
-        else {
-            download file.tar.gz from internet
-            calculate md5sum of tar.gz file
-            store md5sum of tar.gz file in cachedesc
-            decompress, extract archive
-            calculate md5sum of mtx file
-            store md5sum of mtx file in cachedesc
-            pass
-        }
-        */
-        errno = 0;
-    }
-
-    if(errno) {
-        // readdir has failed
     }
 
     close_cachedir(&cd);
 }
+
+#undef INIT_DO_EXTRACT_ARGS
+#undef INIT_DO_DOWNLOAD_ARGS

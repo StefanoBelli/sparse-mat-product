@@ -26,13 +26,10 @@ static void remove_directory_recursive(const char *path) {
         }
         
         char abspath[PATH_MAX + 1];
-        memset(abspath, 0, PATH_MAX + 1);
-
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wformat-truncation"
-        snprintf(abspath, PATH_MAX, "%s/%s", path, dent->d_name);
+        snprintf(abspath, PATH_MAX + 1, "%s/%s", path, dent->d_name);
 #pragma GCC diagnostic pop
-        printf("%s\n", abspath);
 
         struct stat statbuf;
         if (!stat(abspath, &statbuf)) {
@@ -107,8 +104,7 @@ void open_cachedir(const char *cachedir, struct cachedesc **cd_out) {
     }
 
     char cachedesc_filename[PATH_MAX + 1];
-    memset(cachedesc_filename, 0, PATH_MAX + 1);
-    snprintf(cachedesc_filename, PATH_MAX, "%s/cachedesc", cachedir);
+    snprintf(cachedesc_filename, PATH_MAX + 1, "%s/cachedesc", cachedir);
 
     FILE* fp = fopen(cachedesc_filename, "a");
     if(fp == NULL) {
@@ -117,11 +113,8 @@ void open_cachedir(const char *cachedir, struct cachedesc **cd_out) {
 
     __freopen(cachedesc_filename, "r+", fp);
 
-    memset(cd->cachedir_path, 0, PATH_MAX + 1);
-    memcpy(cd->cachedir_path, cachedir, strlen(cachedir));
-
-    memset(cd->cachedesc_path, 0, PATH_MAX + 1);
-    memcpy(cd->cachedesc_path, cachedesc_filename, strlen(cachedesc_filename));
+    snprintf(cd->cachedir_path, PATH_MAX + 1, "%s", cachedir);
+    snprintf(cd->cachedesc_path, PATH_MAX + 1, "%s", cachedesc_filename);
 
     cd->cachedir = dir;
     cd->fp = fp;
@@ -184,14 +177,13 @@ void fix_broken_cachedesc(struct cachedesc *cd) {
             char* cached_checksum = strtok(NULL, " ");
             if(cached_checksum != NULL) {
                 char cached_abs_filepath[PATH_MAX + 1];
-                memset(cached_abs_filepath, 0, PATH_MAX + 1);
-
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wformat-truncation"
-                snprintf(cached_abs_filepath, PATH_MAX, "%s/%s", 
+                snprintf(cached_abs_filepath, PATH_MAX + 1, "%s/%s", 
                     cd->cachedir_path, cached_filename);
 #pragma GCC diagnostic pop
 
+                errno = 0;
                 struct stat statbuf; 
                 if(!stat(cached_abs_filepath, &statbuf) && S_ISREG(statbuf.st_mode)) {
                     if(!has_file_ext(cached_filename, ".mtx")) {
@@ -241,13 +233,12 @@ void fix_broken_cache(const struct cachedesc *cd) {
         }
 
         char abspath[PATH_MAX + 1];
-        memset(abspath, 0, PATH_MAX + 1);
-
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wformat-truncation"
-        snprintf(abspath, PATH_MAX, "%s/%s", cd->cachedir_path, dent->d_name);
+        snprintf(abspath, PATH_MAX + 1, "%s/%s", cd->cachedir_path, dent->d_name);
 #pragma GCC diagnostic pop
 
+        errno = 0;
         struct stat statbuf;
         if(!stat(abspath, &statbuf) && S_ISREG(statbuf.st_mode)) {
             if(!strcmp(dent->d_name, "cachedesc")) {
@@ -318,7 +309,7 @@ finish:
     fix_broken_cachedesc(cd);
 }
 
-int get_csum_from_cachedesc(const struct cachedesc *cd, const char* filename, char* out, size_t outsz) {
+int get_csum_from_cachedesc(const struct cachedesc *cd, const char* filename, char** out) {
     fseek(cd->fp, 0, SEEK_SET);
 
     char *lineptr = NULL;
@@ -330,9 +321,11 @@ int get_csum_from_cachedesc(const struct cachedesc *cd, const char* filename, ch
         char* my_md5csum = strtok(NULL, " ");
 
         if(!strcmp(my_filename, filename)) {
-            size_t md5csumlen = strlen(my_md5csum); //MD5 hash is fixed length but who knows...
-            size_t cpysz = outsz < md5csumlen ? outsz : md5csumlen;
-            memcpy(out, my_md5csum, cpysz);
+            size_t md5csumlen = strlen(my_md5csum);
+            *out = checked_malloc(char, md5csumlen + 1);
+            memset(*out, 0, md5csumlen + 1);
+            memcpy(*out, my_md5csum, md5csumlen);
+            fix_trailing_nls(*out, strlen(*out));
             goto finish1;
         }
 

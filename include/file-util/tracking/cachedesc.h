@@ -18,7 +18,7 @@ void open_cachedir(const char* cachedir, struct cachedesc** cd_out);
 void fix_broken_cache(const struct cachedesc*);
 void fix_broken_cachedesc(struct cachedesc*);
 void update_cachedesc_with_csum(struct cachedesc*, char*);
-int get_csum_from_cachedesc(const struct cachedesc*, const char*, char*, size_t);
+int get_csum_from_cachedesc(const struct cachedesc*, const char*, char**);
 void close_cachedir(struct cachedesc**);
 
 #endif

@@ -12,8 +12,8 @@ struct tracking_files {
     struct tracked_file_name *m;
 };
 
-struct tracking_files *add_file_to_track(const char*);
+struct tracking_files *add_file_to_track(const char*, size_t);
 void free_tracking_files(struct tracking_files**);
-int track_files(const char*, struct tracking_files*);
+void track_files(const char*, struct tracking_files*);
 
 #endif

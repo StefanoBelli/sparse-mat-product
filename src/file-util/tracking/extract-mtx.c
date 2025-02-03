@@ -22,9 +22,7 @@ int extract_mtx(const char* mtxname, const char* outdir) {
         sizeof(".mtx 2>&1");
 
     char *cmdline = checked_malloc(char, cmdlinelen + 1);
-    memset(cmdline, 0, cmdlinelen + 1);
-
-    snprintf(cmdline, cmdlinelen, 
+    snprintf(cmdline, cmdlinelen + 1, 
         "tar xf %s/%s.tar.gz -C %s --strip-components=1 %s/%s.mtx 2>&1",
         outdir, mtxname, outdir, mtxname, mtxname);
 

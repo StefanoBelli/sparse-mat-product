@@ -9,7 +9,7 @@
 
 int download_mtx(const char* groupname, const char* mtxname, const char* outdir) {
     size_t groupnamelen = strlen(groupname);
-    size_t mtxnamelen = strlen(groupname);
+    size_t mtxnamelen = strlen(mtxname);
     size_t outdirlen = strlen(outdir);
     size_t cmdlinelen = 
         sizeof("curl -L -s -o ") + 
@@ -25,9 +25,7 @@ int download_mtx(const char* groupname, const char* mtxname, const char* outdir)
         sizeof(".tar.gz 2>&1");
 
     char* cmdline = checked_malloc(char, cmdlinelen + 1);
-    memset(cmdline, 0, cmdlinelen + 1);
-
-    snprintf(cmdline, cmdlinelen, 
+    snprintf(cmdline, cmdlinelen + 1, 
         "curl -L -s -o %s/%s.tar.gz " BASE_URL "/%s/%s.tar.gz 2>&1", 
         outdir, mtxname, groupname, mtxname);
 
