@@ -1,10 +1,14 @@
 #include<file-util/tracking/checksum.h>
 #include<file-util/tracking/cachedesc.h>
 #include<file-util/tracking/tracking.h>
+#include<file-util/tracking/download-mtx.h>
+#include<file-util/tracking/extract-mtx.h>
+#include<file-util/tracking/utils.h>
 #include<utils.h>
 #include<string.h>
 
 int main(int ac, char** argv) {
+
     /*
     struct cachedesc *cd;
     open_cachedir("./cachedir", &cd);
@@ -46,5 +50,21 @@ int main(int ac, char** argv) {
    free_tracking_files(&tf);
 
     return 0;
-    */
+
+   if(mkcachedir("./cachedi")) {
+        puts("mkcachedir failed");
+   }
+
+   if(download_mtx("HB", "mcfe", "./cachedi")) {
+        puts("gone wrong...download");
+   } else {
+        puts("download ok");
+   }
+
+   if(extract_mtx("mcfe", "./cachedi")) {
+        puts("gone wrong...extract");
+   } else {
+        puts("extract ok");
+   }
+   */
 }

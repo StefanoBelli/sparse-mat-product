@@ -6,7 +6,7 @@
 #include <errno.h>
 
 #define checked_malloc(ty, ne) ({ \
-    ty* ptr = (ty*) malloc(sizeof(ty) * ne); \
+    ty* ptr = (ty*) malloc(sizeof(ty) * (ne)); \
     if(ptr == NULL) { \
         log_error(malloc); \
         exit(EXIT_FAILURE); \
@@ -14,7 +14,7 @@
 })
 
 #define checked_realloc(pt, ty, ne) ({ \
-    ty* ptr = (ty*) realloc(pt, sizeof(ty) * ne); \
+    ty* ptr = (ty*) realloc(pt, sizeof(ty) * (ne)); \
     if(ptr == NULL) { \
         log_error(realloc); \
         exit(EXIT_FAILURE); \

@@ -3,6 +3,18 @@
 
 #include <string.h>
 #include <ctype.h>
+#include <errno.h>
+#include <sys/stat.h>
+
+#define mkcachedir(cdname) \
+    (mkdir(cdname, \
+        S_IRUSR | \
+        S_IRGRP | \
+        S_IROTH | \
+        S_IWUSR | \
+        S_IXUSR | \
+        S_IXGRP | \
+        S_IXOTH ) && errno != EEXIST)
 
 static inline int has_file_ext(const char* filename, const char* ext) {
     char *dotat = strrchr(filename, '.');

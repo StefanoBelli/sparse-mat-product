@@ -1,9 +1,6 @@
 #define _POSIX_C_SOURCE 200809L
 
-#include<errno.h>
-#include<string.h>
 #include<dirent.h>
-#include<sys/stat.h>
 #include<utils.h>
 #include<file-util/tracking/cachedesc.h>
 #include<file-util/tracking/utils.h>
@@ -13,11 +10,11 @@ struct valid_line_list {
     struct valid_line_list *next;
 };
 
-static int remove_directory_recursive(const char *path) {
+static void remove_directory_recursive(const char *path) {
     DIR *dir = opendir(path);
     if (!dir) {
         log_error(opendir);
-        return -1;
+        return;
     }
 
     struct dirent *dent;
@@ -64,8 +61,6 @@ static int remove_directory_recursive(const char *path) {
     if(remove(path)) {
         log_error(remove);
     }
-
-    return 0;
 }
 
 #define __freopen(__path, __mode, __fp) \
@@ -102,7 +97,7 @@ static void replace_file_content(const char* filepath, FILE **fp, struct valid_l
 void open_cachedir(const char *cachedir, struct cachedesc **cd_out) {
     struct cachedesc *cd = checked_malloc(struct cachedesc, 1);
 
-    if(mkdir(cachedir, 0755) == -1 && errno != EEXIST) {
+    if(mkcachedir(cachedir)) {
         fail(mkdir);
     }
 

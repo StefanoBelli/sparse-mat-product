@@ -6,8 +6,10 @@
 #include <file-util/tracking/checksum.h>
 
 int md5sum(const char *filename, struct md5 *out) {
-    size_t filenamelen = strlen(filename);
-    size_t cmdlinelen = strlen(filename) + sizeof("md5sum ") + sizeof(" 2>&1");
+    size_t cmdlinelen = 
+        sizeof("md5sum ") +
+        strlen(filename) + 
+        sizeof(" 2>&1");
 
     char *cmdline = checked_malloc(char, cmdlinelen + 1);
     memset(cmdline, 0, cmdlinelen + 1);
@@ -23,10 +25,9 @@ int md5sum(const char *filename, struct md5 *out) {
     memset(out->checksum, 0, MD5_CHECKSUM_LEN + 1);
     fgets(out->checksum, MD5_CHECKSUM_LEN, f);
 
-    int rv = pclose(f) ? -1 : 0;
-
+    int exitcode = pclose(f);
     free_reset_ptr(cmdline);
-    return rv;
+    return exitcode;
 }
 
 char* rebuild_md5sum_stdout(const char* filename, struct md5* md5) {
