@@ -2,7 +2,6 @@
 #define MATRICES_H
 
 const char *const matrices[] = {
-    /*
     "vanHeukelum cage4",
     "Bai mhda416",
     "HB mcfe",
@@ -33,7 +32,6 @@ const char *const matrices[] = {
     "SNAP amazon0302",
     "Schenk_AFE af_1_k101",
     "SNAP roadNet-PA"
-    */
 };
 
 #endif
