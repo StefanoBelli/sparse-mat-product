@@ -11,6 +11,7 @@ endif
 
 OUT_BIN_DIR=bin
 
+BIN_SERIAL=sparse-mat-product-serial
 BIN_OPENMP=sparse-mat-product-openmp
 BIN_CUDA=sparse-mat-product-cuda
 
@@ -54,6 +55,9 @@ endif
 COMMON_SRC_FILES := $(shell find ./src/ -type f -name '*.c' -not -path "./src/main*")
 COMMON_OBJ_FILES := $(patsubst %.c, %.o, $(COMMON_SRC_FILES))
 
+SERIAL_SPECIFIC_SRC_FILES := $(shell find ./src/main/serial -type f -name '*.c')
+SERIAL_SPECIFIC_OBJ_FILES := $(patsubst %.c, %.o, $(SERIAL_SPECIFIC_SRC_FILES))
+
 OPENMP_SPECIFIC_SRC_FILES := $(shell find ./src/main/openmp -type f -name '*.c')
 OPENMP_SPECIFIC_OBJ_FILES := $(patsubst %.c, %.o, $(OPENMP_SPECIFIC_SRC_FILES))
 
@@ -62,6 +66,7 @@ CUDA_CU_SPECIFIC_SRC_FILES := $(shell find ./src/main/cuda -type f -name \*.cu)
 CUDA_C_SPECIFIC_OBJ_FILES := $(patsubst %.c, %.o, $(CUDA_C_SPECIFIC_SRC_FILES))
 CUDA_CU_SPECIFIC_OBJ_FILES := $(patsubst %.cu, %.o, $(CUDA_CU_SPECIFIC_SRC_FILES))
 
+ELF_OUT_SERIAL := $(OUT_BIN_DIR)/$(BUILD_TYPE)/$(BIN_SERIAL)
 ELF_OUT_OPENMP := $(OUT_BIN_DIR)/$(BUILD_TYPE)/$(BIN_OPENMP)
 ELF_OUT_CUDA := $(OUT_BIN_DIR)/$(BUILD_TYPE)/$(BIN_CUDA) 
 
@@ -71,11 +76,22 @@ $(info libraries to link against: LINK_LIBS=$(LINK_LIBS))
 $(info extras: CC_CFLAGS=$(CC_CFLAGS))
 $(info extra cxx-host-forwarded nvcc flags: NVCC_CC_CFLAGS=$(NVCC_CC_CFLAGS))
 
-all: openmp cuda
+all: serial openmp cuda
 
-clean: clean-common clean-openmp clean-cuda
+clean: clean-serial clean-common clean-openmp clean-cuda
 
 common: $(COMMON_OBJ_FILES)
+
+serial: common $(SERIAL_SPECIFIC_OBJ_FILES)
+	@mkdir -p $(OUT_BIN_DIR)/$(BUILD_TYPE)
+	@printf '\tSERIAL-LINK\n'
+	@$(CC) \
+		$(COMMON_OBJ_FILES) \
+		$(SERIAL_SPECIFIC_OBJ_FILES) \
+		$(LINK_LIBS) \
+		$(SANITIZERS) \
+		-o $(ELF_OUT_SERIAL)
+	@printf '\tELF $(ELF_OUT_SERIAL)\n'
 
 openmp: common $(OPENMP_SPECIFIC_OBJ_FILES)
 	@mkdir -p $(OUT_BIN_DIR)/$(BUILD_TYPE)
@@ -121,7 +137,14 @@ clean-openmp:
         rm $$file; \
     done
 
-$(CUDA_C_SPECIFIC_OBJ_FILES) $(COMMON_OBJ_FILES): %.o: %.c
+CLEAN_SERIAL_OBJS := $(shell find ./src/main/serial -type f -name '*.o')
+clean-serial:
+	@for file in $(CLEAN_SERIAL_OBJS); do \
+        printf "\tCLEAN $${file}\n"; \
+        rm $$file; \
+    done
+
+$(CUDA_C_SPECIFIC_OBJ_FILES) $(COMMON_OBJ_FILES) $(SERIAL_SPECIFIC_OBJ_FILES): %.o: %.c
 	@printf '\tCC $<\n'
 	@$(CC) $(CC_CFLAGS) $(CFLAGS) $< -c -o $@
 
@@ -156,5 +179,5 @@ cppcheck:
 
 help:
 	@echo ----help----
-	@echo Valid targets: all clean common openmp cuda clean-common clean-cuda clean-openmp help
+	@echo Valid targets: all clean common serial openmp cuda clean-common clean-serial clean-cuda clean-openmp help
 	@echo Valid BUILD_TYPEs: $(valid_build_types)
