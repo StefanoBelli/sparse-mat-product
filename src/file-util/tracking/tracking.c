@@ -214,17 +214,42 @@ static void do_download_and_extract(const struct do_download_args *args) {
     _name.filepath_targz = filepath_targz; \
     _name.file_targz = file_targz
 
+static void __clear_remaining_chrs_stdout(int count) {
+    for (int j = 0; j < count; j++){
+        putc(' ', stdout);
+    }
+}
+
+static void __conditional_last_putc(int print_newline) {
+    if(print_newline) {
+        puts("");
+    } else {
+        putc('\r', stdout);
+        fflush(stdout);
+    }
+}
+
+#define log_progress_now(action, status) \
+    { \
+        int curnumprnt; \
+        printf(action " mtx file from %s: %s (%d/%d) [" status "] %n", \
+            cdpath, mtxname, i + 1, tf->len, &curnumprnt); \
+        __clear_remaining_chrs_stdout(abs(numprnt - curnumprnt)); \
+        numprnt = curnumprnt; \
+        __conditional_last_putc(i == tf->len - 1); \
+    }
+
 void track_files(const char* mtxfilesdir, struct tracking_files *tf) {
     struct cachedesc *cd;
     open_cachedir(mtxfilesdir, &cd);
 
     const char* cdpath = cd->cachedir_path;
 
-    // make sure this ordering is right
     fix_broken_cachedesc(cd);
     fix_broken_cache(cd);
 
     int numprnt = 0;
+
     for (int i = 0; i < tf->len; i++) {
         const char* mtxname = tf->m[i].file_name;
         const char* groupname = tf->m[i].group_name;
@@ -243,34 +268,22 @@ void track_files(const char* mtxfilesdir, struct tracking_files *tf) {
                 file_targz, filepath_targz, mtxname, cdpath, "tar.gz");
 
             if(valid_file(cd, filepath_targz, file_targz)) {
+                log_progress_now("corrupt", "download-and-extract...");
                 INIT_DO_DOWNLOAD_ARGS(a);
                 do_download_and_extract(&a); 
             } else {
+                log_progress_now("corrupt", "extract-only...");
                 INIT_DO_EXTRACT_ARGS(a);
                 do_extract(&a);
             }
-        }
-
-        int curnumprnt = 0; 
-        printf("checked mtx files from %s: %s (%d/%d)%n", 
-            cdpath, mtxname, i + 1, tf->len, &curnumprnt);
-
-        for (int j = 0; j < abs(numprnt - curnumprnt); j++) {
-            putc(' ', stdout);
-        }
-
-        numprnt = curnumprnt;
-
-        if(i == tf->len - 1) {
-            puts("");
         } else {
-            putc('\r', stdout);
-            fflush(stdout);
+            log_progress_now("good", "ok"); 
         }
     }
 
     close_cachedir(&cd);
 }
 
+#undef log_progress_now
 #undef INIT_DO_EXTRACT_ARGS
 #undef INIT_DO_DOWNLOAD_ARGS
