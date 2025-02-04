@@ -1,6 +1,8 @@
 #ifndef FILE_UTILS_TRACKING_H
 #define FILE_UTILS_TRACKING_H
 
+#include<stddef.h>
+
 struct tracked_file_name {
     char* group_name;
     char* file_name;

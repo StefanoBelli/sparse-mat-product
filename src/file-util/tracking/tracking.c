@@ -89,13 +89,18 @@ struct tracking_files *add_file_to_track(const char* s, size_t initial_size) {
 }
 
 void free_tracking_files(struct tracking_files **tf) {
-    for(int i = 0; i < (*tf)->len; i++) {
-        free_reset_ptr((*tf)->m[i].group_name);
-        free_reset_ptr((*tf)->m[i].file_name);
-    } 
+    if(*tf) {
+        for(int i = 0; i < (*tf)->len; i++) {
+            struct tracked_file_name *tfn = (*tf)->m;
+            if(tfn) {
+                free_reset_ptr(tfn[i].group_name);
+                free_reset_ptr(tfn[i].file_name);
+            }
+        } 
 
-    free_reset_ptr((*tf)->m);
-    free_reset_ptr(*tf);
+        free_reset_ptr((*tf)->m);
+        free_reset_ptr(*tf);
+    }
 }
 
 static int file_exists(const char* path) {

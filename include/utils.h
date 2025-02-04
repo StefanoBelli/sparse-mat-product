@@ -23,8 +23,10 @@
 
 #define free_reset_ptr(ptr) \
     do { \
-        free(ptr); \
-        (ptr) = NULL; \
+        if((ptr)) { \
+            free((ptr)); \
+            (ptr) = NULL; \
+        } \
     } while(0)
 
 #define __to_s(a) #a
