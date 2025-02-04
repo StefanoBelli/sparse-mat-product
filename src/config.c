@@ -33,6 +33,8 @@ static void add_files_to_track_from_file(const char* filename) {
         add_file_to_track(lineptr, num_default_matrices);
         free_reset_ptr(lineptr);
     }
+    
+    free_reset_ptr(lineptr);
 
     fclose(fp);
 }
