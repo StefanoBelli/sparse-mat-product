@@ -342,4 +342,6 @@ finish1:
     free_reset_ptr(lineptr);
     return rv;
 }
-
+#ifdef FIX_BROKEN_CACHE
+#error nononono
+#endif

@@ -6,15 +6,18 @@
 #include <errno.h>
 #include <sys/stat.h>
 
-#define mkcachedir(cdname) \
-    (mkdir(cdname, \
+#define mkcachedir(cdname) ({ \
+    errno = 0; \
+    int res = (mkdir(cdname, \
         S_IRUSR | \
         S_IRGRP | \
         S_IROTH | \
         S_IWUSR | \
         S_IXUSR | \
         S_IXGRP | \
-        S_IXOTH ) && errno != EEXIST)
+        S_IXOTH ) && errno != EEXIST); \
+    res; \
+})
 
 static inline int has_file_ext(const char* filename, const char* ext) {
     char *dotat = strrchr(filename, '.');

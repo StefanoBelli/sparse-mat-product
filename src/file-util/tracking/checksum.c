@@ -21,7 +21,11 @@ int md5sum(const char *filename, struct md5 *out) {
         return -1;
     }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-result"
     fgets(out->checksum, MD5_CHECKSUM_LEN + 1, f);
+#pragma GCC diagnostic pop
+
     fix_trailing_nls(out->checksum, strlen(out->checksum));
 
     int exitcode = pclose(f);

@@ -5,6 +5,7 @@
 #include<stdio.h>
 #include<string.h>
 #include<errno.h>
+#include<dirent.h>
 #include<linux/limits.h>
 #include<file-util/tracking/tracking.h>
 #include<file-util/tracking/utils.h>
@@ -77,11 +78,91 @@ static void obtain_program_config(int argc, char** argv, struct program_config *
     }
 }
 
-void setup(int argc, char** argv) {
+static struct opened_mtx_file_list* open_all_mtx_files_from_dir(const char* dirpath) {
+    printf("searching for all .mtx files in \"%s\"...\n", dirpath);
+
+    int num_mtxs_found = 0;
+    DIR* d = opendir(dirpath);
+    if(d == NULL) {
+        log_error(opendir);
+        exit(EXIT_FAILURE);
+    }
+
+    struct opened_mtx_file_list *head = NULL;
+    struct opened_mtx_file_list *curr = NULL;
+
+    struct dirent *dent;
+
+    errno = 0;
+    while((dent = readdir(d))) {
+        if(!has_file_ext(dent->d_name, ".mtx")) {
+            char pathbuf[PATH_MAX];
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-truncation"
+            snprintf(pathbuf, PATH_MAX, "%s/%s", dirpath, dent->d_name);
+#pragma GCC diagnostic pop
+
+            FILE *curfp = fopen(pathbuf, "r");
+            if(curfp == NULL) {
+                log_error(fopen);
+            } else {
+                size_t dnamelen = strlen(dent->d_name);
+                struct opened_mtx_file_list *newcurr = checked_malloc(struct opened_mtx_file_list, 1);
+                newcurr->fp = curfp;
+                newcurr->name = checked_malloc(char, dnamelen + 1);
+                newcurr->name[dnamelen] = 0;
+                memcpy(newcurr->name, dent->d_name, dnamelen);
+                newcurr->next = NULL;
+                num_mtxs_found++;
+
+                if(head == NULL) {
+                    head = newcurr;
+                }
+
+                if(curr == NULL) {
+                    curr = newcurr;
+                } else {
+                    curr->next = newcurr;
+                    curr = newcurr;
+                }
+            }
+        }
+        errno = 0;
+    }
+
+    if(errno) {
+        log_error(readdir);
+    }
+
+    if(closedir(d)) {
+        log_error(closedir);
+    }
+
+    printf("%d mtxs were found!\n", num_mtxs_found);
+
+    return head;
+}
+
+void free_all_opened_mtxs(struct opened_mtx_file_list** head) {
+    while(*head) {
+        if(fclose((*head)->fp)) {
+            log_error(fclose);
+        }
+
+        free_reset_ptr((*head)->name);
+
+        struct opened_mtx_file_list *next = (*head)->next;
+        free_reset_ptr(*head);
+
+        *head = next;
+    }
+}
+
+struct opened_mtx_file_list* setup(int argc, char** argv) {
     struct program_config cfg;
     obtain_program_config(argc, argv, &cfg);
 
-    errno = 0;
     if(mkcachedir(cfg.cachedir_path)) {
         log_error(mkdir);
         exit(EXIT_FAILURE);
@@ -93,9 +174,11 @@ void setup(int argc, char** argv) {
 #ifdef FIX_BROKEN_CACHE
         char cachedir_abspath[PATH_MAX];
         char cwd_abspath[PATH_MAX];
-
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-result"
         realpath(cfg.cachedir_path, cachedir_abspath);
         getcwd(cwd_abspath, PATH_MAX);
+#pragma GCC diagnostic pop
 
         if(!strcmp(cwd_abspath, cachedir_abspath)) {
             puts(">>> file tracker may remove some files");
@@ -111,4 +194,6 @@ void setup(int argc, char** argv) {
     }
     
     free_tracking_files(&tracked_files);
+
+    return open_all_mtx_files_from_dir(cfg.cachedir_path);
 }
