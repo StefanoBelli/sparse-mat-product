@@ -245,13 +245,19 @@ static void __conditional_last_putc(int print_newline) {
     }
 
 void track_files(const char* mtxfilesdir, struct tracking_files *tf) {
+    if(tf == NULL) {
+        return;
+    }
+
     struct cachedesc *cd;
     open_cachedir(mtxfilesdir, &cd);
 
     const char* cdpath = cd->cachedir_path;
 
     fix_broken_cachedesc(cd);
+#ifdef FIX_BROKEN_CACHE
     fix_broken_cache(cd);
+#endif
 
     int numprnt = 0;
 

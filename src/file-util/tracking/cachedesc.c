@@ -10,6 +10,7 @@ struct valid_line_list {
     struct valid_line_list *next;
 };
 
+#ifdef FIX_BROKEN_CACHE
 static void remove_directory_recursive(const char *path) {
     DIR *dir = opendir(path);
     if (!dir) {
@@ -59,6 +60,7 @@ static void remove_directory_recursive(const char *path) {
         log_error(remove);
     }
 }
+#endif
 
 #define __freopen(__path, __mode, __fp) \
     do { \
@@ -219,6 +221,7 @@ next:
 #undef add_valid_line
 #undef this_is_a_valid_line
 
+#ifdef FIX_BROKEN_CACHE
 void fix_broken_cache(const struct cachedesc *cd) {
     fseek(cd->fp, 0, SEEK_SET);
 
@@ -278,6 +281,7 @@ next1:
         log_error(readdir);
     }
 }
+#endif
 
 void update_cachedesc_with_csum(struct cachedesc *cd, char* md5sum_stdout) {
     fseek(cd->fp, 0, SEEK_SET);

@@ -1,5 +1,6 @@
 #define _POSIX_C_SOURCE 200809L
 
+#include<unistd.h>
 #include<getopt.h>
 #include<stdio.h>
 #include<string.h>
@@ -25,7 +26,7 @@ static void add_files_to_track_from_file(const char* filename) {
         return;
     }
 
-    char* lineptr;
+    char* lineptr = NULL;
     size_t sz;
 
     while(getline(&lineptr, &sz, fp) != -1) {
@@ -87,6 +88,23 @@ void setup(int argc, char** argv) {
     struct tracking_files* tracked_files = add_file_to_track(NULL, 0);
 
     if(cfg.i_need_to_track_files) {
+#ifdef FIX_BROKEN_CACHE
+        char cachedir_abspath[PATH_MAX];
+        char cwd_abspath[PATH_MAX];
+
+        realpath(cfg.cachedir_path, cachedir_abspath);
+        getcwd(cwd_abspath, PATH_MAX);
+
+        if(!strcmp(cwd_abspath, cachedir_abspath)) {
+            puts(">>> file tracker may remove some files");
+            puts(">>> by specifying this current working directory");
+            puts(">>> you will loose them");
+            puts(">>> specify another directory with \"-m <dir>\" or");
+            puts(">>> use \"-d\" to disable file tracker");
+            exit(EXIT_FAILURE);
+        }
+#endif
+
         track_files(cfg.cachedir_path, tracked_files);
     }
     
