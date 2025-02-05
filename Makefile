@@ -78,7 +78,7 @@ $(info extra cxx-host-forwarded nvcc flags: NVCC_CC_CFLAGS=$(NVCC_CC_CFLAGS))
 
 all: serial openmp cuda
 
-clean: clean-serial clean-common clean-openmp clean-cuda
+clean: clean-common clean-serial clean-openmp clean-cuda
 
 common: $(COMMON_OBJ_FILES)
 

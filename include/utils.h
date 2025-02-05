@@ -13,6 +13,14 @@
     }; ptr; \
 })
 
+#define checked_calloc(ty, ne) ({ \
+    ty* ptr = (ty*) calloc((ne), sizeof(ty)); \
+    if(ptr == NULL) { \
+        log_error(calloc); \
+        exit(EXIT_FAILURE); \
+    }; ptr; \
+})
+
 #define checked_realloc(pt, ty, ne) ({ \
     ty* ptr = (ty*) realloc(pt, sizeof(ty) * (ne)); \
     if(ptr == NULL) { \
