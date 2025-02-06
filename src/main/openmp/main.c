@@ -1,4 +1,5 @@
 #include<config.h>
+#include<matrix/represent.h>
 #include<matrix/market-read.h>
 #include<utils.h>
 
@@ -15,22 +16,9 @@ int main(int argc, char** argv) {
         struct matrix_nonzero* mtx = NULL;
         if((mtx=read_matrix_market(head->fp, &m, &n, &nz))) {
             printf("trying to access matrix %s\n\tm=%ld, n=%ld, nz=%ld\n", head->name, m, n, nz);
-            uint64_t ui = 0;
-            uint64_t uj = 0;
-            double uval = 0;
-
-            for(uint64_t c = 0; c < nz; c++) {
-                int z1 = mtx[c].i;
-                int z2 = mtx[c].j;
-                double z3 = mtx[c].val;
-
-                ui += z1;
-                uj += z2;
-                uval += z3;
-            }
-
-            printf("\t\t%ld, %ld, %lg (yesfree)\n", ui, uj, uval);
-
+            struct hll_repr hll;
+            to_hll(&hll, mtx, m, nz, 32);
+            free_hll_repr(&hll);
             free(mtx);
         }
 

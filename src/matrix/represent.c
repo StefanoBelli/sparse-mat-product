@@ -64,7 +64,7 @@ static void to_ellpack(
         uint64_t end_m) {
 
     out->m = end_m - start_m;
-    uint64_t *nzs = checked_malloc(uint64_t, out->m);
+    uint64_t *nzs = checked_calloc(uint64_t, out->m);
 
     for(uint64_t i = 0; i < nz; i++) {
         if(start_m <= coo[i].i && coo[i].i < end_m) {
@@ -95,7 +95,7 @@ static void to_ellpack(
         for(uint64_t j = 0; j < out->maxnz; j++) {
             uint64_t remnz = out->maxnz - j;
             for(uint64_t k = 1; k < remnz + 1; k++) {
-                out->ja[i][j + k - 1] = out->ja[i][j - 1];
+                out->ja[i][j + k - 1] = out->ja[i][j];
             }
         }
     }
