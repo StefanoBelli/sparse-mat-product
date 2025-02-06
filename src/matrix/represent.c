@@ -93,9 +93,13 @@ static void to_ellpack(
 
     for(uint64_t i = 0; i < out->m; i++) {
         for(uint64_t j = 0; j < out->maxnz; j++) {
-            uint64_t remnz = out->maxnz - j;
-            for(uint64_t k = 1; k < remnz + 1; k++) {
-                out->ja[i][j + k - 1] = out->ja[i][j];
+            if (j > 0 && out->as[i][j] == 0) {
+                uint64_t remnz = out->maxnz - j;
+                for (uint64_t k = 0; k < remnz; k++) {
+                    out->ja[i][j + k] = out->ja[i][j - 1];
+                }
+
+                break;
             }
         }
     }
@@ -139,9 +143,7 @@ void to_hll(
 }
 
 void free_hll_repr(struct hll_repr *hr) {
-    for(uint64_t i = 0; i < hr->numblks; i++) {
-        free_ellpack_repr(&hr->blks[i]);
-    }
+    free_ellpack_repr(hr->blks);
     free_reset_ptr(hr->blks);
     free_reset_ptr(hr->blksizs);
 }

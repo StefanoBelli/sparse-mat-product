@@ -19,7 +19,7 @@ int main(int argc, char** argv) {
             struct hll_repr hll;
             to_hll(&hll, mtx, m, nz, 32);
             free_hll_repr(&hll);
-            free(mtx);
+            free_reset_ptr(mtx);
         }
 
         head = head->next;
