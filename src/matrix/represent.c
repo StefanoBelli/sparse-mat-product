@@ -80,6 +80,7 @@ static void to_ellpack(
 
     uint64_t* cols = checked_calloc(uint64_t, out->m);
 
+    printf("nz = %d\n");
     for(uint64_t i = 0; i < nz; i++) {
         if(start_m <= coo[i].i && coo[i].i < end_m) {
             uint64_t eff_idx = coo[i].i - start_m;
@@ -91,6 +92,7 @@ static void to_ellpack(
 
     free_reset_ptr(cols);
 
+    printf("m = %d, maxnz = %d\n", out->m, out->maxnz);
     for(uint64_t i = 0; i < out->m; i++) {
         uint64_t last_valid_index = 0;
         for(uint64_t j = 0; j < out->maxnz; j++) {

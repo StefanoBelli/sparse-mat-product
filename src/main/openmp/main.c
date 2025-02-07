@@ -14,11 +14,12 @@ int main(int argc, char** argv) {
         uint64_t n = 0;
         uint64_t nz = 0;
         struct matrix_nonzero* mtx = NULL;
+        printf("%s\n", head->name);
         if((mtx=read_matrix_market(head->fp, &m, &n, &nz))) {
             printf("trying to access matrix %s\n\tm=%ld, n=%ld, nz=%ld\n", head->name, m, n, nz);
-            struct hll_repr hll;
-            to_hll(&hll, mtx, m, nz, 32);
-            free_hll_repr(&hll);
+            //struct hll_repr hll;
+            //to_hll(&hll, mtx, m, nz, 32);
+            //free_hll_repr(&hll);
             free_reset_ptr(mtx);
         }
 

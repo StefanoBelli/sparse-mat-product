@@ -70,6 +70,11 @@ struct matrix_nonzero *read_matrix_market(FILE* fp, uint64_t *m, uint64_t *n, ui
 
         if (mm_is_pattern(matcode)) {
             mtx[i_nz].val = 1;
+        } else {
+            if(mtx[i_nz].val == 0) {
+                //printf("zero read, tmp_nz = %d\n", tmp_nz);
+                //exit(EXIT_FAILURE);
+            }
         }
 
         if (mm_is_symmetric(matcode)) {
@@ -83,6 +88,8 @@ struct matrix_nonzero *read_matrix_market(FILE* fp, uint64_t *m, uint64_t *n, ui
     } else {
         *nz = tmp_nz;
     }
+
+    //qsorting here
 
     return mtx;
 }
