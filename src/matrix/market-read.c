@@ -119,9 +119,6 @@ struct matrix_nonzero *read_matrix_market(FILE* fp, uint64_t *m, uint64_t *n, ui
 
     if(*nz < initial_alloc_size) {
         mtx = checked_realloc(mtx, struct matrix_nonzero, *nz);
-    } else if (*nz > initial_alloc_size) {
-        printf("there is a bug: unexpected cond\n\t*nz > initial_alloc_size\nterminating...\n");
-        exit(EXIT_FAILURE);
     }
 
     return mtx;
