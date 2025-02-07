@@ -97,6 +97,7 @@ openmp: common $(OPENMP_SPECIFIC_OBJ_FILES)
 	@mkdir -p $(OUT_BIN_DIR)/$(BUILD_TYPE)
 	@printf '\tOPENMP-LINK\n'
 	@$(CC) \
+		-fopenmp \
 		$(COMMON_OBJ_FILES) \
 		$(OPENMP_SPECIFIC_OBJ_FILES) \
 		$(LINK_LIBS) \
@@ -150,7 +151,7 @@ $(CUDA_C_SPECIFIC_OBJ_FILES) $(COMMON_OBJ_FILES) $(SERIAL_SPECIFIC_OBJ_FILES): %
 
 $(OPENMP_SPECIFIC_OBJ_FILES): %.o: %.c
 	@printf '\tCC $<\n'
-	@$(CC) $(CC_CFLAGS) $(CFLAGS) $< -c -o $@
+	@$(CC) -fopenmp $(CC_CFLAGS) $(CFLAGS) $< -c -o $@
  
 $(CUDA_CU_SPECIFIC_OBJ_FILES): %.o: %.cu
 	@printf '\tCC $<\n'
