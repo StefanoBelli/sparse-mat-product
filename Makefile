@@ -86,7 +86,6 @@ serial: common $(SERIAL_SPECIFIC_OBJ_FILES)
 	@mkdir -p $(OUT_BIN_DIR)/$(BUILD_TYPE)
 	@printf '\tSERIAL-LINK\n'
 	@$(CC) \
-		-fopenmp \
 		$(COMMON_OBJ_FILES) \
 		$(SERIAL_SPECIFIC_OBJ_FILES) \
 		$(LINK_LIBS) \
@@ -98,7 +97,6 @@ openmp: common $(OPENMP_SPECIFIC_OBJ_FILES)
 	@mkdir -p $(OUT_BIN_DIR)/$(BUILD_TYPE)
 	@printf '\tOPENMP-LINK\n'
 	@$(CC) \
-		-fopenmp \
 		$(COMMON_OBJ_FILES) \
 		$(OPENMP_SPECIFIC_OBJ_FILES) \
 		$(LINK_LIBS) \
@@ -148,11 +146,11 @@ clean-serial:
 
 $(CUDA_C_SPECIFIC_OBJ_FILES) $(COMMON_OBJ_FILES) $(SERIAL_SPECIFIC_OBJ_FILES): %.o: %.c
 	@printf '\tCC $<\n'
-	@$(CC) -fopenmp $(CC_CFLAGS) $(CFLAGS) $< -c -o $@
+	@$(CC) $(CC_CFLAGS) $(CFLAGS) $< -c -o $@
 
 $(OPENMP_SPECIFIC_OBJ_FILES): %.o: %.c
 	@printf '\tCC $<\n'
-	@$(CC) -fopenmp $(CC_CFLAGS) $(CFLAGS) $< -c -o $@
+	@$(CC) $(CC_CFLAGS) $(CFLAGS) $< -c -o $@
  
 $(CUDA_CU_SPECIFIC_OBJ_FILES): %.o: %.cu
 	@printf '\tCC $<\n'

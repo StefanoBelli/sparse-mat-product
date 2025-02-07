@@ -63,11 +63,9 @@ static void to_ellpack(
         uint64_t start_m, 
         uint64_t end_m) {
 
-    printf("into ellpackkk\n");
-
     out->m = end_m - start_m;
     uint64_t *nzs = checked_calloc(uint64_t, out->m);
-
+    
     for(uint64_t i = 0; i < nz; i++) {
         if(start_m <= coo[i].i && coo[i].i < end_m) {
             nzs[coo[i].i - start_m]++;
@@ -90,7 +88,7 @@ static void to_ellpack(
             cols[eff_idx]++;
         }
     }
-    
+
     free_reset_ptr(cols);
 
     for(uint64_t i = 0; i < out->m; i++) {
@@ -118,7 +116,6 @@ static void free_ellpack_repr(struct ellpack_repr *er) {
     free_reset_ptr(er->as);
 }
 
-#include <omp.h>
 void to_hll(
         struct hll_repr *out, 
         const struct matrix_nonzero *coo, 
@@ -126,23 +123,18 @@ void to_hll(
         uint64_t nz, 
         uint64_t hs) {
 
-    uint64_t curblk = 0;
-
-    out->numblks = m % hs ? ceil(m / hs) + 1 : (uint64_t) (m / hs);
+    out->numblks = m % hs ? ceil(m / hs) + 1 : (uint64_t)(m / hs);
     out->blks = checked_malloc(struct ellpack_repr, out->numblks);
     out->blksizs = checked_malloc(uint64_t, out->numblks);
 
-    printf("%d\n ", omp_get_num_threads());
-//#pragma omp parallel for
     for (uint64_t r = 0; r < m; r += hs) {
         uint64_t final_row = r + hs;
-        if(final_row > m) {
+        if (final_row > m) {
             final_row = m;
         }
-        printf("%d %d, %d %d\n", r, m, curblk, out->numblks);
-        to_ellpack(&(out->blks[curblk]), coo, nz, r, final_row);
-        out->blksizs[curblk] = final_row - r;
-        curblk++;
+        int tmp_idx_to_change = r / hs;
+        to_ellpack(&(out->blks[tmp_idx_to_change]), coo, nz, r, final_row);
+        out->blksizs[tmp_idx_to_change] = final_row - r;
     }
 }
 
