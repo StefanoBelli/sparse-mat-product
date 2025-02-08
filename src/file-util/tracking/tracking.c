@@ -23,13 +23,13 @@ int parse_input_string(const char* is, struct parsed_input_string* out) {
         return -1;
     }
 
-    char* group = strtok(my_is, " ");
+    const char* group = strtok(my_is, " ");
     if(group == NULL) {
         free_reset_ptr(my_is);
         return -1;
     }
 
-    char* name = strtok(NULL, " ");
+    const char* name = strtok(NULL, " ");
     if(name == NULL) {
         free_reset_ptr(my_is);
         return -1;
@@ -107,7 +107,7 @@ static int file_exists(const char* path) {
     return !stat(path, &statbuf) && errno != ENOENT && S_ISREG(statbuf.st_mode);
 }
 
-static int valid_file(struct cachedesc *cd, const char* filepath, const char* filename) {
+static int valid_file(const struct cachedesc *cd, const char* filepath, const char* filename) {
     if(file_exists(filepath)) {
         char *checksum;
         if(get_csum_from_cachedesc(cd, filename, &checksum)) {

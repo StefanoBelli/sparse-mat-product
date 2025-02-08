@@ -20,7 +20,7 @@
 })
 
 static inline int has_file_ext(const char* filename, const char* ext) {
-    char *dotat = strrchr(filename, '.');
+    const char *dotat = strrchr(filename, '.');
     if(dotat == NULL) {
         return 1;
     }

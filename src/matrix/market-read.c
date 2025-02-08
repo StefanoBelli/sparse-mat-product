@@ -44,8 +44,8 @@ static inline void symmetry_fixup(struct coo_repr *m, uint64_t index, uint64_t o
 }
 
 static int coo_sparse_comparator(const void *m1, const void *m2) {
-    struct coo_repr *mtx1 = (struct coo_repr*) m1;
-    struct coo_repr *mtx2 = (struct coo_repr*) m2;
+    const struct coo_repr *mtx1 = (const struct coo_repr*) m1;
+    const struct coo_repr *mtx2 = (const struct coo_repr*) m2;
 
     if(mtx1->v == 0 && mtx2->v == 0) {
         return 0;

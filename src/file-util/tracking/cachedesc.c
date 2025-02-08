@@ -174,7 +174,7 @@ void fix_broken_cachedesc(struct cachedesc *cd) {
 
         char* cached_filename = strtok(lineptr, " ");
         if(cached_filename != NULL) {
-            char* cached_checksum = strtok(NULL, " ");
+            const char* cached_checksum = strtok(NULL, " ");
             if(cached_checksum != NULL) {
                 char cached_abs_filepath[PATH_MAX + 1];
 #pragma GCC diagnostic push
@@ -294,7 +294,7 @@ void update_cachedesc_with_csum(struct cachedesc *cd, char* md5sum_stdout) {
     long prevpos = ftell(cd->fp);
 
     while(getline(&lineptr, &lnsz, cd->fp) != -1) {
-        char* filename = strtok(lineptr, " ");
+        const char* filename = strtok(lineptr, " ");
         if(filename) {
             if(!strcmp(filename, new_filename)) {
                 fseek(cd->fp, prevpos, SEEK_SET);
@@ -320,8 +320,8 @@ int get_csum_from_cachedesc(const struct cachedesc *cd, const char* filename, ch
     int rv = 0;
 
     while(getline(&lineptr, &sz, cd->fp) != -1) {
-        char* my_filename = strtok(lineptr, " ");
-        char* my_md5csum = strtok(NULL, " ");
+        const char* my_filename = strtok(lineptr, " ");
+        const char* my_md5csum = strtok(NULL, " ");
 
         if(!strcmp(my_filename, filename)) {
             size_t md5csumlen = strlen(my_md5csum);

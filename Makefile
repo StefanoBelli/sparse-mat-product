@@ -23,7 +23,7 @@ CFLAGS=-Wall -W -Wextra -Wshadow -march=native -I$(INCLUDES)
 CC_CFLAGS=-std=c11
 NVCC_CFLAGS=-Xptxas="--verbose --warn-on-double-precision-use --warn-on-local-memory-usage --warn-on-spills"
 NVCC_CC_CFLAGS=
-LINK_LIBS=
+LINK_LIBS=-lm
 SANITIZERS=
 
 ifeq ($(BUILD_TYPE), release)
