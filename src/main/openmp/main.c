@@ -13,7 +13,7 @@ int main(int argc, char** argv) {
         uint64_t m = 0;
         uint64_t n = 0;
         uint64_t nz = 0;
-        struct matrix_nonzero* mtx = NULL;
+        struct coo_repr* mtx = NULL;
         printf("%s\n", head->name);
         if((mtx=read_matrix_market(head->fp, &m, &n, &nz))) {
             printf("trying to access matrix %s\n\tm=%ld, n=%ld, nz=%ld\n", head->name, m, n, nz);

@@ -3,7 +3,6 @@
 
 #include <stdio.h>
 #include <dirent.h>
-#include <sys/types.h>
 #include <linux/limits.h>
 #include "checksum.h"
 

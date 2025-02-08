@@ -1,7 +1,5 @@
 #define _POSIX_C_SOURCE 200809L
 
-#include <stdio.h>
-#include <string.h>
 #include <utils.h>
 #include <file-util/tracking/checksum.h>
 #include <file-util/tracking/utils.h>

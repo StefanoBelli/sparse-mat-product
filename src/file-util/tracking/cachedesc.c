@@ -1,6 +1,5 @@
 #define _POSIX_C_SOURCE 200809L
 
-#include<dirent.h>
 #include<utils.h>
 #include<file-util/tracking/cachedesc.h>
 #include<file-util/tracking/utils.h>

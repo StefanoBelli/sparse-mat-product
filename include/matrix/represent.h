@@ -9,7 +9,7 @@ struct csr_repr {
     double *as;
 };
 
-void to_csr(struct csr_repr* out, const struct matrix_nonzero *coo, uint64_t m, uint64_t nz);
+void to_csr(struct csr_repr* out, const struct coo_repr *coo, uint64_t nz, uint64_t m);
 void free_csr_repr(struct csr_repr*);
 
 struct ellpack_repr {
@@ -21,11 +21,10 @@ struct ellpack_repr {
 
 struct hll_repr {
     uint64_t numblks;
-    uint64_t *blksizs;
     struct ellpack_repr *blks;
 };
 
-void to_hll(struct hll_repr* out, const struct matrix_nonzero *coo, uint64_t mtot, uint64_t nz, uint64_t hs);
+void to_hll(struct hll_repr* out, const struct coo_repr *coo, uint64_t m, uint64_t hs);
 void free_hll_repr(struct hll_repr*);
 
 #endif

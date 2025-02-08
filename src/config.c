@@ -1,10 +1,6 @@
 #define _POSIX_C_SOURCE 200809L
 
-#include<unistd.h>
 #include<getopt.h>
-#include<stdio.h>
-#include<string.h>
-#include<errno.h>
 #include<dirent.h>
 #include<linux/limits.h>
 #include<file-util/tracking/tracking.h>

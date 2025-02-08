@@ -1,5 +1,3 @@
-#include <string.h>
-#include <math.h>
 #include <utils.h>
 #include <file-util/tracking/tracking.h>
 #include <file-util/tracking/utils.h>
