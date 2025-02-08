@@ -14,7 +14,7 @@ coo_to_csr(
     out->irp = checked_calloc(uint64_t, m + 1);
 
     uint64_t irp_index = 0;
-    uint64_t cur_row_idx = 0;
+    uint64_t cur_row_idx = coo[0].i;
 
     out->irp[irp_index++] = cur_row_idx;
 

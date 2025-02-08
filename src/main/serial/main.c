@@ -20,7 +20,8 @@ void ellprod(char* y, int m, const struct ellpack_repr* ell, const double* x) {
 
 int main() {
 
-    double vek[] = {1,1,0,0};
+    int hs = 3;
+    double vek[] = {1,0,1,0};
     double y[] = {0,0,0,0};
 
     int M = 4;
@@ -61,15 +62,19 @@ int main() {
     y[2] = 0;
     y[3] = 0;
 
-    int hs = 2;
     struct hll_repr hll;
     coo_to_hll(&hll, coo, nz, M, hs);
 
     for(int numblk = 0; numblk < hll.numblks; numblk++) {
         char tmp[4];
         ellprod(tmp, hs, &hll.blks[numblk], vek);
-        for(int i = 0; i < hs; i++) {
-            y[i + (numblk * hs)] = tmp[i];
+        int endrow = hs;
+        if (numblk * hs + hs > M) {
+            endrow = M - hs;
+        }
+
+        for(int i = 0; i < endrow; i++) {
+            y[i + numblk * hs] = tmp[i];
         }
     }
 
