@@ -16,6 +16,8 @@ coo_to_csr(
     uint64_t irp_index = 0;
     uint64_t cur_row_idx = 0;
 
+    out->irp[irp_index++] = cur_row_idx;
+
     for(uint64_t i = 0; i < nz; i++) {
         if(cur_row_idx != coo[i].i) {
             cur_row_idx = coo[i].i;

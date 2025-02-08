@@ -14,13 +14,13 @@ int main(int argc, char** argv) {
         uint64_t n = 0;
         uint64_t nz = 0;
         struct coo_repr* mtx = NULL;
-        printf("%s\n", head->name);
         if((mtx=read_matrix_market(head->fp, &m, &n, &nz))) {
-            printf("trying to access matrix %s\n\tm=%ld, n=%ld, nz=%ld\n", head->name, m, n, nz);
             struct csr_repr csr;
             coo_to_csr(&csr, mtx, nz, m);
+
             struct hll_repr hll;
             coo_to_hll(&hll, mtx, nz, m, 32);
+
             free_csr_repr(&csr);
             free_hll_repr(&hll, 32);
             free_reset_ptr(mtx);
