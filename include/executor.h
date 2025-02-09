@@ -48,11 +48,9 @@ struct kernel_info {
 };
 
 /*
- * after the final kernel, NULL
- */
-void register_kernels_to_execute(const struct kernel_info *kerninfos);
-
-/*
+ * runner stored for data collection
+ * kerninfo is NULL-terminated
+ * 
  * for each kernel
  *  for each matrix
  *   for each range(NTimes)
@@ -61,6 +59,6 @@ void register_kernels_to_execute(const struct kernel_info *kerninfos);
  *  done
  * done
  */
-void run_executor(runner_type runner, int argc, char** argv);
+void run_executor(int argc, char **argv, runner_type runner, const struct kernel_info *kerninfos);
 
 #endif
