@@ -1,5 +1,5 @@
 #include <matrix/market-read.h>
-#include <matrix/represent.h>
+#include <matrix/format.h>
 
 #define ASSIGN_COO(_i, _j, _v, _idx) \
     do { \
@@ -8,7 +8,7 @@
         coo[_idx].v = _v; \
     } while(0)
 
-void ellprod(double* y, uint64_t m, const struct ellpack_repr* ell, const double* x) {
+void ellprod(double* y, uint64_t m, const struct ellpack_format* ell, const double* x) {
     for(uint64_t i = 0; i < m; i++) {
         double t = 0;
         for(uint64_t j = 0; j < ell->maxnz; j++) {
@@ -30,7 +30,7 @@ int main(int ac, char** argv) {
 
     uint64_t M = 4;
     uint64_t nz = 7;
-    struct coo_repr coo[7];
+    struct coo_format coo[7];
 
     ASSIGN_COO(0, 0, 11, 0);
     ASSIGN_COO(0, 1, 12, 1);
@@ -40,7 +40,7 @@ int main(int ac, char** argv) {
     ASSIGN_COO(3, 2, 43, 5);
     ASSIGN_COO(3, 3, 44, 6);
 
-    struct csr_repr csr;
+    struct csr_format csr;
 
     coo_to_csr(&csr, coo, nz, M);
 
@@ -60,14 +60,14 @@ int main(int ac, char** argv) {
     }
     printf("\n");
 
-    free_csr_repr(&csr);
+    free_csr_format(&csr);
 
     y[0] = 0;
     y[1] = 0;
     y[2] = 0;
     y[3] = 0;
 
-    struct hll_repr hll;
+    struct hll_format hll;
     coo_to_hll(&hll, coo, nz, M, hs);
 
     for(uint64_t numblk = 0; numblk < hll.numblks; numblk++) {
@@ -83,7 +83,7 @@ int main(int ac, char** argv) {
         }
     }
 
-    free_hll_repr(&hll, hs);
+    free_hll_format(&hll, hs);
 
     printf(" hll ");
     for(uint64_t i = 0; i < 4; i++) {

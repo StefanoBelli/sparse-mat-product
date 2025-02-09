@@ -1,11 +1,11 @@
 #include <math.h>
 #include <utils.h>
-#include <matrix/represent.h>
+#include <matrix/format.h>
 
 void 
 coo_to_csr(
-        struct csr_repr* out, 
-        const struct coo_repr *coo, 
+        struct csr_format* out, 
+        const struct coo_format *coo, 
         uint64_t nz, 
         uint64_t m) {
 
@@ -33,7 +33,7 @@ coo_to_csr(
     out->irp = checked_realloc(out->irp, uint64_t, irp_index);
 }
 
-void free_csr_repr(struct csr_repr* cr) {
+void free_csr_format(struct csr_format* cr) {
     free_reset_ptr(cr->as);
     free_reset_ptr(cr->ja);
     free_reset_ptr(cr->irp);
@@ -59,8 +59,8 @@ void free_csr_repr(struct csr_repr* cr) {
 
 static void 
 coo_to_ellpack(
-        struct ellpack_repr *out, 
-        const struct coo_repr *coo, 
+        struct ellpack_format *out, 
+        const struct coo_format *coo, 
         uint64_t nz, 
         uint64_t m, 
         uint64_t s_row, 
@@ -104,7 +104,7 @@ coo_to_ellpack(
 #undef my_max
 #undef checked_matrix_calloc
 
-static void free_ellpack_repr(struct ellpack_repr *er, uint64_t m) {
+static void free_ellpack_format(struct ellpack_format *er, uint64_t m) {
     for(uint64_t i = 0; i < m; i++) {
         free_reset_ptr(er->ja[i]);
         free_reset_ptr(er->as[i]);
@@ -120,8 +120,8 @@ static void free_ellpack_repr(struct ellpack_repr *er, uint64_t m) {
 
 void 
 coo_to_hll(
-        struct hll_repr* out, 
-        const struct coo_repr *coo, 
+        struct hll_format* out, 
+        const struct coo_format *coo, 
         uint64_t nz,
         uint64_t m,
         uint64_t hs) {
@@ -129,7 +129,7 @@ coo_to_hll(
     double _m_d_hs = dcast(m) / dcast(hs);
 
     out->numblks = m % hs ? u64cast(floor(_m_d_hs)) + 1 : u64cast(_m_d_hs);
-    out->blks = checked_malloc(struct ellpack_repr, out->numblks);
+    out->blks = checked_malloc(struct ellpack_format, out->numblks);
 
     uint64_t starting_coo_incl_idx = 0;
     uint64_t i_idx = 0;
@@ -156,9 +156,9 @@ coo_to_hll(
 #undef u64cast
 #undef dcast
 
-void free_hll_repr(struct hll_repr* hr, uint64_t hs) {
+void free_hll_format(struct hll_format* hr, uint64_t hs) {
     for(uint64_t i = 0; i < hr->numblks; i++) {
-        free_ellpack_repr(&hr->blks[i], hs);
+        free_ellpack_format(&hr->blks[i], hs);
     }
 
     free_reset_ptr(hr->blks);

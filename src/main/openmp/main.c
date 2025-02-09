@@ -1,5 +1,5 @@
 #include<config.h>
-#include<matrix/represent.h>
+#include<matrix/format.h>
 #include<matrix/market-read.h>
 #include<utils.h>
 
@@ -13,16 +13,16 @@ int main(int argc, char** argv) {
         uint64_t m = 0;
         uint64_t n = 0;
         uint64_t nz = 0;
-        struct coo_repr* mtx = NULL;
+        struct coo_format* mtx = NULL;
         if((mtx=read_matrix_market(head->fp, &m, &n, &nz))) {
-            struct csr_repr csr;
+            struct csr_format csr;
             coo_to_csr(&csr, mtx, nz, m);
 
-            struct hll_repr hll;
+            struct hll_format hll;
             coo_to_hll(&hll, mtx, nz, m, 32);
 
-            free_csr_repr(&csr);
-            free_hll_repr(&hll, 32);
+            free_csr_format(&csr);
+            free_hll_format(&hll, 32);
             free_reset_ptr(mtx);
         }
 
