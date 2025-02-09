@@ -64,7 +64,7 @@ static int coo_sparse_comparator(const void *m1, const void *m2) {
     }
 }
 
-struct coo_format *read_matrix_market(FILE* fp, uint64_t *m, uint64_t *n, uint64_t *nz) {
+struct coo_format *read_matrix_market(FILE* fp, uint64_t *m, uint64_t *n, uint64_t *nz, uint64_t *ez) {
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-result"
@@ -83,7 +83,7 @@ struct coo_format *read_matrix_market(FILE* fp, uint64_t *m, uint64_t *n, uint64
     struct coo_format *mtx = checked_calloc(struct coo_format, initial_alloc_size);
     const char *fmt = mm_is_real(matcode) ? "%d %d %lg\n" : "%d %d\n";
 
-    uint64_t ez = 0;
+    *ez = 0;
 
     for (uint64_t i_nz = 0; i_nz < tmp_nz; i_nz++) {
 
@@ -96,12 +96,12 @@ struct coo_format *read_matrix_market(FILE* fp, uint64_t *m, uint64_t *n, uint64
             mtx[i_nz].v = 1;
         } else {
             if(mtx[i_nz].v == 0) {
-                ez++;
+                *ez += 1;
             }
         }
 
         if (mm_is_symmetric(matcode)) {
-            symmetry_fixup(mtx, i_nz, tmp_nz, &diag_nz, &ez);
+            symmetry_fixup(mtx, i_nz, tmp_nz, &diag_nz, ez);
         }
     }
 
@@ -111,7 +111,7 @@ struct coo_format *read_matrix_market(FILE* fp, uint64_t *m, uint64_t *n, uint64
         *nz = tmp_nz;
     }
 
-    *nz -= ez;
+    *nz -= *ez;
 
     qsort(mtx, initial_alloc_size, sizeof(struct coo_format), coo_sparse_comparator);
 

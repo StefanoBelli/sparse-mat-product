@@ -3,12 +3,6 @@
 
 #include <stdint.h>
 
-// function ptr
-// mult datatype (INT32, INT64, FLOAT32, FLOAT64)
-// repr type (CSR, HLL)
-// device / host type (CPU_SERIAL, CPU_MT, GPU)
-// num of threads (relevant if device/host type == CPU_MT)
-
 enum mult_datatype {
     FLOAT64,
     FLOAT32,
@@ -16,31 +10,50 @@ enum mult_datatype {
     INT64
 };
 
-enum matrix_repr {
+enum matrix_format {
     CSR,
     HLL
 };
 
-enum processor_type {
+enum runner_type {
     CPU_SERIAL,
     CPU_MT,
     GPU
 };
 
-typedef double (*kernel_fp)(const void*, const void*);
-typedef enum mult_datatype mult_datatype;
-typedef enum matrix_repr matrix_repr;
-typedef enum processor_type processor_type;
-
-struct kernel_info {
-    kernel_fp kernel;
-    mult_datatype datatype;
-    matrix_repr repr;
-    processor_type proc;
-    uint32_t nthrs;
+struct csr_args {
+    uint64_t m;
+    uint64_t nz;
 };
 
-void register_kernels_to_execute(uint32_t nk, const struct kernel_info *kerninfos);
-void run_executor();
+struct hll_args {
+    uint64_t m;
+    uint64_t nz;
+    uint64_t hs;
+};
+
+/*
+ * returns kernel execution time
+ * first arg is matrix in whatever format (explicit cast needed)
+ * and second arg are matrix args (explicit cast needed)
+ */
+typedef double (*kernel_fp)(const void*, const void*);
+typedef enum mult_datatype mult_datatype;
+typedef enum matrix_format matrix_format;
+typedef enum runner_type runner_type;
+
+struct kernel_info {
+    kernel_fp kernel;                        /* kernel function pointer, needed */
+    matrix_format format;                    /* matrix format, needed */
+    mult_datatype multiply_datatype;         /* multiplication datatype, data collection */
+    runner_type runner;                      /* runner (host or device), data collection*/
+    uint32_t cpu_mt_numthreads;              /* self-explainatory, data collection */
+};
+
+/*
+ * after the final kernel, NULL
+ */
+void register_kernels_to_execute(const struct kernel_info *kerninfos);
+void run_executor(int argc, char** argv);
 
 #endif
