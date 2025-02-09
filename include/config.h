@@ -9,7 +9,7 @@ struct opened_mtx_file_list {
     struct opened_mtx_file_list *next;
 };
 
-struct opened_mtx_file_list* setup(int argc, char** argv);
+struct opened_mtx_file_list* setup(int argc, char** argv, int *nt);
 void free_all_opened_mtxs(struct opened_mtx_file_list**);
 
 #endif

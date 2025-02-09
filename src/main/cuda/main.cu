@@ -7,7 +7,7 @@ __global__ void Kernel(void) {
 }
 
 int main(int argc, char** argv) {
-    setup(argc, argv);
+    //setup(argc, argv);
 
     Kernel<<<1,1,1>>>();
     cudaDeviceSynchronize();

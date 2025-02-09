@@ -21,13 +21,20 @@ enum runner_type {
 
 struct csr_args {
     uint64_t m;
+    uint64_t n;
     uint64_t nz;
 };
 
 struct hll_args {
     uint64_t m;
+    uint64_t n;
     uint64_t nz;
     uint64_t hs;
+};
+
+union format_args {
+    struct csr_args csr;
+    struct hll_args hll;
 };
 
 /*
@@ -35,23 +42,37 @@ struct hll_args {
  * first arg is matrix in whatever format (explicit cast needed)
  * and second arg are matrix args (explicit cast needed)
  */
-typedef double (*kernel_fp)(const void*, const void*);
+typedef double (*kernel_fp)(const void*, const union format_args*);
 typedef enum mult_datatype mult_datatype;
 typedef enum matrix_format matrix_format;
 typedef enum runner_type runner_type;
 
-struct kernel_info {
+struct kernel_execution_info {
     kernel_fp kernel;                        /* kernel function pointer, needed */
     matrix_format format;                    /* matrix format, needed */
+    uint32_t cpu_mt_numthreads;              /* self-explainatory, data collection, set nthreads when cpu_mt */
+    uint32_t hll_hack_size;                  /* self-explainatory, data collection, set hacksize when hll */
     mult_datatype multiply_datatype;         /* multiplication datatype, data collection */
-    uint32_t cpu_mt_numthreads;              /* self-explainatory, data collection */
+};
+
+/* 
+ * set num threads -- avoid the need to use -fopenmp on every translation unit or
+ * complicate the Makefile. Client code sets this function pointer that is called
+ * when needed. Must return whether thread set successful or not (1 or 0 respectfully).
+ */
+typedef int (*setnumthrs_fp)(uint32_t);
+
+struct executor_args {
+    setnumthrs_fp set_num_thread;
+    const struct kernel_execution_info *kexinfos;
+    int nkexs;
+    runner_type runner;
 };
 
 /*
  * runner stored for data collection
- * kerninfo is NULL-terminated
  * 
- * for each kernel
+ * for each kernel_execution
  *  for each matrix
  *   for each range(NTimes)
  *     time_it_took = kernel(mtx_in_format, format_params)
@@ -59,6 +80,6 @@ struct kernel_info {
  *  done
  * done
  */
-void run_executor(int argc, char **argv, runner_type runner, const struct kernel_info *kerninfos);
+void run_executor(int argc, char **argv, const struct executor_args *exesetup);
 
 #endif

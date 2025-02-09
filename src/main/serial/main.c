@@ -22,6 +22,7 @@ void ellprod(double* y, uint64_t m, const struct ellpack_format* ell, const doub
 
 int main(int ac, char** argv) {
 
+    /*
     //printf("cmdline = %s %s %s %s %s\n", argv[1], argv[2], argv[3], argv[4], argv[5]);
 
     uint64_t hs = atoi(argv[1]);
@@ -90,5 +91,6 @@ int main(int ac, char** argv) {
         printf("%lg,", y[i]);
     }
     printf("\n");
+    */
     return 0;
 }

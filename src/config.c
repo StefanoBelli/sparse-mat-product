@@ -47,14 +47,16 @@ static void enable_tracking_of_mandatory_matrices() {
     }
 }
 
-static void obtain_program_config(int argc, char** argv, struct program_config *cfg) {
+static void obtain_program_config(int argc, char** argv, struct program_config *cfg, int *nt) {
+    *nt = 10;
+
     enable_tracking_of_mandatory_matrices();
 
     cfg->i_need_to_track_files = 1;
     get_default_cachedir(cfg->cachedir_path);
 
     int opt;
-    while((opt = getopt(argc, argv, "dem:t:f:")) != -1) {
+    while((opt = getopt(argc, argv, "dem:t:f:n:")) != -1) {
         switch(opt) {
             case 'd':
             cfg->i_need_to_track_files = 0; break;
@@ -70,6 +72,9 @@ static void obtain_program_config(int argc, char** argv, struct program_config *
 
             case 'f':
             add_files_to_track_from_file(optarg); break;
+
+            case 'n':
+            *nt = atoi(optarg); break;
         }
     }
 }
@@ -155,9 +160,9 @@ void free_all_opened_mtxs(struct opened_mtx_file_list** head) {
     }
 }
 
-struct opened_mtx_file_list* setup(int argc, char** argv) {
+struct opened_mtx_file_list* setup(int argc, char** argv, int *nt) {
     struct program_config cfg;
-    obtain_program_config(argc, argv, &cfg);
+    obtain_program_config(argc, argv, &cfg, nt);
 
     if(mkcachedir(cfg.cachedir_path)) {
         log_error(mkdir);
