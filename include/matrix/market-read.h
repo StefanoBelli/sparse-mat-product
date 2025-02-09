@@ -10,6 +10,6 @@ struct coo_format {
     uint64_t j;
 };
 
-struct coo_format *read_matrix_market(FILE *fp, uint64_t *m, uint64_t *n, uint64_t *nz, uint64_t *ez);
+struct coo_format *read_matrix_market(FILE *fp, uint64_t *m, uint64_t *n, uint64_t *nz);
 
 #endif

@@ -6,8 +6,6 @@
 enum mult_datatype {
     FLOAT64,
     FLOAT32,
-    INT32,
-    INT64
 };
 
 enum matrix_format {
@@ -46,7 +44,6 @@ struct kernel_info {
     kernel_fp kernel;                        /* kernel function pointer, needed */
     matrix_format format;                    /* matrix format, needed */
     mult_datatype multiply_datatype;         /* multiplication datatype, data collection */
-    runner_type runner;                      /* runner (host or device), data collection*/
     uint32_t cpu_mt_numthreads;              /* self-explainatory, data collection */
 };
 
@@ -54,6 +51,16 @@ struct kernel_info {
  * after the final kernel, NULL
  */
 void register_kernels_to_execute(const struct kernel_info *kerninfos);
-void run_executor(int argc, char** argv);
+
+/*
+ * for each kernel
+ *  for each matrix
+ *   for each range(NTimes)
+ *     time_it_took = kernel(mtx_in_format, format_params)
+ *   done
+ *  done
+ * done
+ */
+void run_executor(runner_type runner, int argc, char** argv);
 
 #endif
