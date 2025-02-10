@@ -1,7 +1,7 @@
 #define _POSIX_C_SOURCE 200809L
 
 #include <utils.h>
-#include <file-util/tracking/download-mtx.h>
+#include <tracking/download-mtx.h>
 
 #define BASE_URL "http://sparse-files.engr.tamu.edu/MM"
 

@@ -1,7 +1,7 @@
 #define _POSIX_C_SOURCE 200809L
 
 #include <utils.h>
-#include <file-util/tracking/extract-mtx.h>
+#include <tracking/extract-mtx.h>
 
 int extract_mtx(const char* mtxname, const char* outdir) {
     size_t mtxnamelen = strlen(mtxname);

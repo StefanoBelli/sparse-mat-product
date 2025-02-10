@@ -1,9 +1,9 @@
 #include <utils.h>
-#include <file-util/tracking/tracking.h>
-#include <file-util/tracking/utils.h>
-#include <file-util/tracking/cachedesc.h>
-#include <file-util/tracking/extract-mtx.h>
-#include <file-util/tracking/download-mtx.h>
+#include <tracking/tracking.h>
+#include <tracking/utils.h>
+#include <tracking/cachedesc.h>
+#include <tracking/extract-mtx.h>
+#include <tracking/download-mtx.h>
 
 struct parsed_input_string {
     char *group;

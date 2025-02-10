@@ -1,3 +1,5 @@
+#include <cuda/helper_cuda.h>
+
 extern "C" {
 #include <config.h>
 }

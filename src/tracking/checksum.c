@@ -1,8 +1,8 @@
 #define _POSIX_C_SOURCE 200809L
 
 #include <utils.h>
-#include <file-util/tracking/checksum.h>
-#include <file-util/tracking/utils.h>
+#include <tracking/checksum.h>
+#include <tracking/utils.h>
 
 int md5sum(const char *filename, struct md5 *out) {
     size_t cmdlinelen = 

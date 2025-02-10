@@ -3,8 +3,8 @@
 #include<getopt.h>
 #include<dirent.h>
 #include<linux/limits.h>
-#include<file-util/tracking/tracking.h>
-#include<file-util/tracking/utils.h>
+#include<tracking/tracking.h>
+#include<tracking/utils.h>
 #include<utils.h>
 #include<matrices.h>
 #include<config.h>

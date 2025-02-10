@@ -1,8 +1,8 @@
 #define _POSIX_C_SOURCE 200809L
 
 #include<utils.h>
-#include<file-util/tracking/cachedesc.h>
-#include<file-util/tracking/utils.h>
+#include<tracking/cachedesc.h>
+#include<tracking/utils.h>
 
 struct valid_line_list {
     char* lineptr;
