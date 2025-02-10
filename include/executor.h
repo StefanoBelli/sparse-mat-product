@@ -29,7 +29,7 @@ struct hll_args {
     uint64_t m;
     uint64_t n;
     uint64_t nz;
-    uint64_t hs;
+    uint32_t hs;
 };
 
 union format_args {

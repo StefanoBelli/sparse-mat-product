@@ -16,7 +16,8 @@ int main(int argc, char** argv) {
         },
         {
             .kernel = kernel_hll,
-            .format = HLL
+            .format = HLL,
+            .hll_hack_size = 32,
         }
     };
 

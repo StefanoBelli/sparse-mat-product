@@ -5,6 +5,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <errno.h>
+#include <sys/stat.h>
 
 #define checked_malloc(ty, ne) ({ \
     ty* ptr = (ty*) malloc(sizeof(ty) * (ne)); \
@@ -49,5 +50,18 @@
 
 #define log_warn_simple(msg) \
     printf("WARNING [" __FILE__ ":" to_s(__LINE__) "] %s - " msg "\n", __func__)
+
+#define mkcachedir(cdname) ({ \
+    errno = 0; \
+    int res = (mkdir(cdname, \
+        S_IRUSR | \
+        S_IRGRP | \
+        S_IROTH | \
+        S_IWUSR | \
+        S_IXUSR | \
+        S_IXGRP | \
+        S_IXOTH ) && errno != EEXIST); \
+    res; \
+})
 
 #endif
