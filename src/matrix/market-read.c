@@ -92,6 +92,9 @@ struct coo_format *read_matrix_market(FILE* fp, uint64_t *m, uint64_t *n, uint64
         fscanf(fp, fmt, &mtx[i_nz].i, &mtx[i_nz].j, &mtx[i_nz].v);
 #pragma GCC diagnostic pop
 
+        mtx[i_nz].i--;
+        mtx[i_nz].j--;
+
         if (mm_is_pattern(matcode)) {
             mtx[i_nz].v = 1;
         } else {

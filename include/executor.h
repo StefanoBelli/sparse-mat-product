@@ -42,7 +42,7 @@ union format_args {
  * first arg is matrix in whatever format (explicit cast needed)
  * and second arg are matrix args (explicit cast needed)
  */
-typedef double (*kernel_fp)(const void*, const union format_args*);
+typedef double (*kernel_fp)(const void*, const union format_args*, const char*);
 typedef enum mult_datatype mult_datatype;
 typedef enum matrix_format matrix_format;
 typedef enum runner_type runner_type;

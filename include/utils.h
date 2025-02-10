@@ -3,7 +3,9 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <time.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <errno.h>
 #include <sys/stat.h>
 
@@ -62,6 +64,18 @@
         S_IXGRP | \
         S_IXOTH ) && errno != EEXIST); \
     res; \
+})
+
+#define MAX_ELEM_VAL 1000
+
+double *make_vector_of_doubles(uint64_t nelems);
+double hrt_get_time();
+
+#define hrt_get_time() ({ \
+    struct timespec ts; \
+    clock_gettime(CLOCK_MONOTONIC, &ts); \
+    double _time = ts.tv_sec + ts.tv_nsec / 1e9; \
+    _time; \
 })
 
 #endif

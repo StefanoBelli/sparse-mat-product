@@ -226,7 +226,10 @@ void run_executor(int argc, char **argv, const struct executor_args *exe_args) {
                 double *times = checked_malloc(double, num_trials);
 
                 for(int i = 0; i < num_trials; i++) {
-                    times[i] = exe_args->kexinfos[k].kernel(fmt_mtx, &args);
+                    char* _mtx_ptr = get_matrix_name(head);
+                    times[i] = exe_args->kexinfos[k].kernel(fmt_mtx, &args, head->name);
+                    restore_matrix_name(_mtx_ptr);
+
                     write_result_csv_entry(mtxresfp, global_id++, times[i], 
                                         &exe_args->kexinfos[k], exe_args->runner,
                                         &args);

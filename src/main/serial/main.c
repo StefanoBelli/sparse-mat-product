@@ -1,96 +1,110 @@
-#include <matrix/market-read.h>
+#define _POSIX_C_SOURCE 200809L
+
+#include <utils.h>
+#include <executor.h>
 #include <matrix/format.h>
+#include <linux/limits.h>
 
-#define ASSIGN_COO(_i, _j, _v, _idx) \
-    do { \
-        coo[_idx].i = _i; \
-        coo[_idx].j = _j; \
-        coo[_idx].v = _v; \
-    } while(0)
+#define always_inline inline __attribute__((always_inline))
 
-void ellprod(double* y, uint64_t m, const struct ellpack_format* ell, const double* x) {
-    for(uint64_t i = 0; i < m; i++) {
-        double t = 0;
-        for(uint64_t j = 0; j < ell->maxnz; j++) {
-            t += ell->as[i][j] * x[ell->ja[i][j]];
+static double kernel_csr(const void *format, const union format_args *format_args, const char* mtxname) {
+    const struct csr_format *csr = (const struct csr_format*) format;
+
+    double *x = make_vector_of_doubles(format_args->csr.n);
+    double *y = checked_calloc(double, format_args->csr.m);
+
+    double start = hrt_get_time();
+    for(uint64_t i = 0; i < format_args->csr.m; i++) {
+        for(uint64_t j = csr->irp[i]; j < csr->irp[i + 1]; j++) {
+            y[i] += csr->as[j] * x[csr->ja[j]];
         }
-        y[i] = t;
+    }
+    double end = hrt_get_time();
+
+    free_reset_ptr(x);
+    //free_reset_ptr(y);
+
+    char buf[PATH_MAX];
+    snprintf(buf, PATH_MAX, "%s_c.log", mtxname);
+    FILE *f = fopen(buf, "w");
+    for(int i = 0; i < format_args->csr.m; i++) {
+        fprintf(f, "%lg\n", y[i]);
+    }
+
+    free_reset_ptr(y);
+    fclose(f);
+
+    return end - start;
+}
+
+static always_inline void ellprod(double* y, uint64_t m, const struct ellpack_format* ell, const double* x) {
+    for(uint64_t i = 0; i < m; i++) {
+        for(uint64_t j = 0; j < ell->maxnz; j++) {
+            y[i] += ell->as[i][j] * x[ell->ja[i][j]];
+        }
     }
 }
 
-#include<stdlib.h>
+static double kernel_hll(const void *format, const union format_args *format_args, const char *mtxname) {
+    const struct hll_format *hll = (const struct hll_format*) format;
 
-int main(int ac, char** argv) {
+    uint32_t hs = format_args->hll.hs;
+    uint32_t m = format_args->hll.m;
 
-    /*
-    //printf("cmdline = %s %s %s %s %s\n", argv[1], argv[2], argv[3], argv[4], argv[5]);
+    double *x = make_vector_of_doubles(format_args->csr.n);
+    double *y = checked_calloc(double, m);
 
-    uint64_t hs = atoi(argv[1]);
-    double vek[] = {atoi(argv[2]),atoi(argv[3]),atoi(argv[4]),atoi(argv[5])};
-    double y[] = {0,0,0,0};
+    double *t = checked_calloc(double, hs);
 
-    uint64_t M = 4;
-    uint64_t nz = 7;
-    struct coo_format coo[7];
-
-    ASSIGN_COO(0, 0, 11, 0);
-    ASSIGN_COO(0, 1, 12, 1);
-    ASSIGN_COO(1, 1, 22, 2);
-    ASSIGN_COO(1, 2, 23, 3);
-    ASSIGN_COO(2, 2, 33, 4);
-    ASSIGN_COO(3, 2, 43, 5);
-    ASSIGN_COO(3, 3, 44, 6);
-
-    struct csr_format csr;
-
-    coo_to_csr(&csr, coo, nz, M);
-
-    printf(" csr ");
-    for(uint64_t i = 0; i < M; i++) {
-        double t = 0;
-
-        for(uint64_t j = csr.irp[i]; j < csr.irp[i + 1]; j++) {
-            t += csr.as[j] * vek[csr.ja[j]];
-        }
-
-        y[i] = t;
-    }
-
-    for(uint64_t i = 0; i < 4; i++) {
-        printf("%lg,", y[i]);
-    }
-    printf("\n");
-
-    free_csr_format(&csr);
-
-    y[0] = 0;
-    y[1] = 0;
-    y[2] = 0;
-    y[3] = 0;
-
-    struct hll_format hll;
-    coo_to_hll(&hll, coo, nz, M, hs);
-
-    for(uint64_t numblk = 0; numblk < hll.numblks; numblk++) {
-        double tmp[4];
-        ellprod(tmp, hs, &hll.blks[numblk], vek);
+    double start = hrt_get_time();
+    for(uint64_t numblk = 0; numblk < hll->numblks; numblk++) {
+        ellprod(t, hs, &hll->blks[numblk], x);
         uint64_t endrow = hs;
-        if (numblk * hs + hs > M) {
-            endrow = M - hs;
+        if (numblk * hs + hs > m) {
+            endrow = m - numblk * hs;
         }
 
         for(uint64_t i = 0; i < endrow; i++) {
-            y[i + numblk * hs] = tmp[i];
+            y[i + numblk * hs] = t[i];
+            t[i] = 0;
         }
     }
+    double end = hrt_get_time();
 
-    free_hll_format(&hll, hs);
+    free_reset_ptr(t);
+    free_reset_ptr(x);
+    //free_reset_ptr(y);
 
-    printf(" hll ");
-    for(uint64_t i = 0; i < 4; i++) {
-        printf("%lg,", y[i]);
+    char buf[PATH_MAX];
+    snprintf(buf, PATH_MAX, "%s_h.log", mtxname);
+    FILE *f = fopen(buf, "w");
+    for(int i = 0; i < format_args->csr.m; i++) {
+        fprintf(f, "%lg\n", y[i]);
     }
-    printf("\n");
-    */
+
+    free_reset_ptr(y);
+    fclose(f);
+    return end - start;
+}
+
+int main(int argc, char** argv) {
+    struct kernel_execution_info kexi[2] = {
+        {
+            .kernel = kernel_csr,
+            .format = CSR
+        },
+        {
+            .kernel = kernel_hll,
+            .format = HLL
+        }
+    };
+
+    struct executor_args eargs = {
+        .nkexs = 2,
+        .runner = CPU_SERIAL,
+        .kexinfos = kexi
+    };
+
+    run_executor(argc, argv, &eargs);
     return 0;
 }

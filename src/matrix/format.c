@@ -16,7 +16,7 @@ coo_to_csr(
     uint64_t irp_index = 0;
     uint64_t cur_row_idx = coo[0].i;
 
-    out->irp[irp_index++] = cur_row_idx;
+    out->irp[irp_index++] = 0;
 
     for(uint64_t i = 0; i < nz; i++) {
         if(cur_row_idx != coo[i].i) {
@@ -29,8 +29,6 @@ coo_to_csr(
     }
 
     out->irp[irp_index++] = nz;
-
-    out->irp = checked_realloc(out->irp, uint64_t, irp_index);
 }
 
 void free_csr_format(struct csr_format* cr) {
