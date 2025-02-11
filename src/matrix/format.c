@@ -19,8 +19,7 @@ coo_to_csr(
     out->irp[irp_index++] = 0;
 
     for(uint64_t i = 0; i < nz; i++) {
-        if(cur_row_idx != coo[i].i) {
-            cur_row_idx = coo[i].i;
+        for(; cur_row_idx < coo[i].i; cur_row_idx++) {
             out->irp[irp_index++] = i;
         }
 
@@ -28,7 +27,9 @@ coo_to_csr(
         out->ja[i] = coo[i].j;
     }
 
-    out->irp[irp_index++] = nz;
+    for(; cur_row_idx < m; cur_row_idx++) {
+        out->irp[irp_index++] = nz;
+    }
 }
 
 void free_csr_format(struct csr_format* cr) {

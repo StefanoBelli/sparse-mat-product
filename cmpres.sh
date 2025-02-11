@@ -28,3 +28,5 @@ for h_file in "$dir"/*_h.log; do
         printf "ok\r"
     done < "$h_file" 3< "$c_file"
 done
+
+echo "all checks are passing!"

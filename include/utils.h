@@ -69,7 +69,6 @@
 #define MAX_ELEM_VAL 1000
 
 double *make_vector_of_doubles(uint64_t nelems);
-double hrt_get_time();
 
 #define hrt_get_time() ({ \
     struct timespec ts; \
