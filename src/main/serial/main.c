@@ -25,6 +25,7 @@ static void __kernel_csr(const struct csr_format *csr, uint32_t m, double *x, do
 
 static always_inline void __kernel_ell(double* y, uint64_t m, const struct ellpack_format* ell, const double* x) {
     for(uint64_t i = 0; i < m; i++) {
+        y[i] = 0;
         for(uint64_t j = 0; j < ell->maxnz; j++) {
             y[i] += ell->as[i][j] * x[ell->ja[i][j]];
         }
@@ -32,7 +33,7 @@ static always_inline void __kernel_ell(double* y, uint64_t m, const struct ellpa
 }
 
 static void __kernel_hll(const struct hll_format *hll, uint32_t hs, uint32_t m, double *x, double *y) {
-    double *t = checked_calloc(double, hs);
+    double t[hs];
 
     for(uint64_t numblk = 0; numblk < hll->numblks; numblk++) {
         __kernel_ell(t, hs, &hll->blks[numblk], x);
@@ -43,11 +44,8 @@ static void __kernel_hll(const struct hll_format *hll, uint32_t hs, uint32_t m, 
 
         for(uint64_t i = 0; i < endrow; i++) {
             y[i + numblk * hs] = t[i];
-            t[i] = 0;
         }
     }
-
-    free_reset_ptr(t);
 }
 
 static double 
@@ -105,12 +103,14 @@ int main(int argc, char** argv) {
     struct kernel_execution_info kexi[2] = {
         {
             .kernel_time_meter = kernel_csr_caller_taketime,
-            .format = CSR
+            .format = CSR,
+            .multiply_datatype = FLOAT64
         },
         {
             .kernel_time_meter = kernel_hll_caller_taketime,
             .format = HLL,
-            .hll_hack_size = 32
+            .multiply_datatype = FLOAT64,
+            .hll_hack_size = 1024,
         }
     };
 
@@ -121,5 +121,5 @@ int main(int argc, char** argv) {
     };
 
     run_executor(argc, argv, &eargs);
-    return 0;
+    return EXIT_SUCCESS;
 }
