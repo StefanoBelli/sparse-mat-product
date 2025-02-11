@@ -1,9 +1,17 @@
 #define _POSIX_C_SOURCE 200809L
 
+//#define LOG_RESULTING_VECTOR
+
+#ifdef LOG_RESULTING_VECTOR
+#define LOG_Y_VECTOR(_mtxname, _ch, _m) \
+    log_resulting_vector_entries("serial", _mtxname, _ch, _m, y)
+#else
+#define LOG_Y_VECTOR(_mtxname, _ch, _m)
+#endif
+
 #include <utils.h>
 #include <executor.h>
 #include <matrix/format.h>
-#include <linux/limits.h>
 
 #define always_inline inline __attribute__((always_inline))
 
@@ -22,17 +30,10 @@ static double kernel_csr(const void *format, const union format_args *format_arg
     double end = hrt_get_time();
 
     free_reset_ptr(x);
-    //free_reset_ptr(y);
 
-    char buf[PATH_MAX];
-    snprintf(buf, PATH_MAX, "%s_c.log", mtxname);
-    FILE *f = fopen(buf, "w");
-    for(int i = 0; i < format_args->csr.m; i++) {
-        fprintf(f, "%lg\n", y[i]);
-    }
+    LOG_Y_VECTOR(mtxname, 'c', format_args->csr.m);
 
     free_reset_ptr(y);
-    fclose(f);
 
     return end - start;
 }
@@ -73,17 +74,11 @@ static double kernel_hll(const void *format, const union format_args *format_arg
 
     free_reset_ptr(t);
     free_reset_ptr(x);
-    //free_reset_ptr(y);
 
-    char buf[PATH_MAX];
-    snprintf(buf, PATH_MAX, "%s_h.log", mtxname);
-    FILE *f = fopen(buf, "w");
-    for(int i = 0; i < format_args->csr.m; i++) {
-        fprintf(f, "%lg\n", y[i]);
-    }
+    LOG_Y_VECTOR(mtxname, 'h', format_args->hll.m);
 
     free_reset_ptr(y);
-    fclose(f);
+
     return end - start;
 }
 

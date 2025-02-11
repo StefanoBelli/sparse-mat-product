@@ -77,4 +77,8 @@ double *make_vector_of_doubles(uint64_t nelems);
     _time; \
 })
 
+#ifdef LOG_RESULTING_VECTOR
+void log_resulting_vector_entries(const char* basedir, const char* mtxname, char ch, uint64_t m, double* y);
+#endif
+
 #endif
