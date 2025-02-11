@@ -12,7 +12,7 @@ struct coo_params {
 };
 
 static void 
-*prepare_kernel_args(
+*prepare_kernel_tm_args(
         const struct kernel_execution_info *kexinfo, 
         union format_args *args, 
         const struct coo_params* coo) {
@@ -45,7 +45,7 @@ static void
 }
 
 static void 
-set_num_threads_before_kernel_execution(
+set_num_threads_before_kernel_tm_execution(
         const struct executor_args *args,
         const struct kernel_execution_info *kexinfo) {
 
@@ -219,15 +219,15 @@ void run_executor(int argc, char **argv, const struct executor_args *exe_args) {
             int global_id = 1;
             for(int k = 0; k < exe_args->nkexs; k++) {
                 union format_args args;
-                void *fmt_mtx = prepare_kernel_args(&exe_args->kexinfos[k], &args, &coo_p);
+                void *fmt_mtx = prepare_kernel_tm_args(&exe_args->kexinfos[k], &args, &coo_p);
 
-                set_num_threads_before_kernel_execution(exe_args, &exe_args->kexinfos[k]);
+                set_num_threads_before_kernel_tm_execution(exe_args, &exe_args->kexinfos[k]);
 
                 double *times = checked_malloc(double, num_trials);
 
                 for(int i = 0; i < num_trials; i++) {
                     char* _mtx_ptr = get_matrix_name(head);
-                    times[i] = exe_args->kexinfos[k].kernel(fmt_mtx, &args, head->name);
+                    times[i] = exe_args->kexinfos[k].kernel_time_meter(fmt_mtx, &args, head->name);
                     restore_matrix_name(_mtx_ptr);
 
                     write_result_csv_entry(mtxresfp, global_id++, times[i], 
