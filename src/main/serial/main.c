@@ -17,18 +17,21 @@
 
 static void __kernel_csr(const struct csr_format *csr, uint32_t m, double *x, double *y) {
     for(uint64_t i = 0; i < m; i++) {
+        double t = 0;
         for(uint64_t j = csr->irp[i]; j < csr->irp[i + 1]; j++) {
-            y[i] += csr->as[j] * x[csr->ja[j]];
+            t += csr->as[j] * x[csr->ja[j]];
         }
+        y[i] = t;
     }
 }
 
 static always_inline void __kernel_ell(double* y, uint64_t m, const struct ellpack_format* ell, const double* x) {
     for(uint64_t i = 0; i < m; i++) {
-        y[i] = 0;
+        double t = 0;
         for(uint64_t j = 0; j < ell->maxnz; j++) {
-            y[i] += ell->as[i][j] * x[ell->ja[i][j]];
+            t += ell->as[i][j] * x[ell->ja[i][j]];
         }
+        y[i] = t;
     }
 }
 
