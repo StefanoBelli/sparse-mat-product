@@ -62,8 +62,9 @@ __global__ void __kernel_csr_v2(const uint64_t *irp, const uint64_t *ja, const d
             const int j = warp_global_index + i;
             if(irps <= j && j <= irpe) {
                 row_shmem[threadIdx.x] = as[j] * x[ja[j]];
+                break;
             }
-            printf("thread %d del warp %d gestisce indice %d\n", threadIdx.x % 32, threadIdx.x / 32, i);
+            //printf("thread %d del warp %d gestisce indice %d\n", threadIdx.x % 32, threadIdx.x / 32, i);
         }
     }
 
