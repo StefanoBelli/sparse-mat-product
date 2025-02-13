@@ -73,7 +73,7 @@ __global__ void __kernel_csr_v2(
     } else {
         for(int i = thread_idx_in_warp; i < nj; i += 32) {
             const int j = warp_global_index + i;
-            if(irps <= j && j <= irpe) {
+            if(irps <= j && j < irpe) {
                 row_shmem[threadIdx.x] = as[j] * x[ja[j]];
             }
         }
