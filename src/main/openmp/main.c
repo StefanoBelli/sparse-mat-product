@@ -21,7 +21,13 @@
 #include <executor.h>
 #include <matrix/format.h>
 
-static void __kernel_csr(const uint64_t *irp, const uint64_t *ja, const double *as, uint32_t m, const double *x, double *y) {
+static void __kernel_csr(
+        const uint64_t *irp, 
+        const uint64_t *ja, 
+        const double *as, 
+        uint32_t m, 
+        const double *x, 
+        double *y) {
  
 #pragma omp parallel for schedule(static)
     for(uint64_t i = 0; i < m; i++) {
@@ -33,7 +39,13 @@ static void __kernel_csr(const uint64_t *irp, const uint64_t *ja, const double *
     }
 }
 
-static void __kernel_hll(const struct ellpack_format *blks, uint64_t numblks, uint32_t hs, uint32_t m, const double *x, double *y) {
+static void __kernel_hll(
+        const struct ellpack_format *blks, 
+        uint64_t numblks, 
+        uint32_t hs, 
+        uint32_t m, 
+        const double *x, 
+        double *y) {
 
 #pragma omp parallel for schedule(dynamic)
     for(uint64_t numblk = 0; numblk < numblks; numblk++) {

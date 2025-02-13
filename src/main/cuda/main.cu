@@ -7,7 +7,14 @@ extern "C" {
 #include <matrix/format.h>
 }
 
-__global__ void __kernel_csr(const uint64_t *irp, const uint64_t *ja, const double *as, uint32_t m, const double *x, double *y) {
+__global__ void __kernel_csr(
+        const uint64_t *irp, 
+        const uint64_t *ja, 
+        const double *as, 
+        uint32_t m, 
+        const double *x, 
+        double *y) {
+
     if(threadIdx.x % 32 != 0) {
         return;
     }
@@ -27,7 +34,14 @@ __global__ void __kernel_csr(const uint64_t *irp, const uint64_t *ja, const doub
     y[warp_global_index] = t;
 }
 
-__global__ void __kernel_csr_v2(const uint64_t *irp, const uint64_t *ja, const double *as, uint32_t m, const double *x, double *y) {
+__global__ void __kernel_csr_v2(
+        const uint64_t *irp, 
+        const uint64_t *ja, 
+        const double *as, 
+        int32_t m, 
+        const double *x, 
+        double *y) {
+
     extern __shared__ double row_shmem[];
 
     const int warp_global_index = (blockIdx.x * blockDim.x + threadIdx.x) / 32;
@@ -55,16 +69,13 @@ __global__ void __kernel_csr_v2(const uint64_t *irp, const uint64_t *ja, const d
 
         if(irps <= j && j < irpe) {
             row_shmem[threadIdx.x] = as[j] * x[ja[j]];
-            printf("thread %d is accessing %d\n", threadIdx.x, j);
         }
     } else {
         for(int i = thread_idx_in_warp; i < nj; i += 32) {
             const int j = warp_global_index + i;
             if(irps <= j && j <= irpe) {
                 row_shmem[threadIdx.x] = as[j] * x[ja[j]];
-                break;
             }
-            //printf("thread %d del warp %d gestisce indice %d\n", threadIdx.x % 32, threadIdx.x / 32, i);
         }
     }
 
