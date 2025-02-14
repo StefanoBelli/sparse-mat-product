@@ -1,10 +1,14 @@
 #include <iostream>
 #include <utility>
+#include <functional>
 #include <cmath>
+
 #include <cuda/helper_cuda.h>
 
 extern "C" {
 #include <matrix/format.h>
+#include <executor.h>
+#include <utils.h>
 }
 
 void ensure_device_capabilities_csr(const std::pair<dim3, dim3>& dims, const cudaDeviceProp& device_props) {
@@ -141,7 +145,7 @@ __global__ void __kernel_csr_v3(
         const uint64_t *irp, 
         const uint64_t *ja, 
         const double *as, 
-        int32_t m, 
+        uint32_t m, 
         const double *x, 
         double *y) {
 
@@ -175,6 +179,7 @@ __global__ void __kernel_csr_v3(
         for(int i = thread_idx_in_warp; i < nj; i += warpSize) {
             const int j = warp_global_index + i;
             if(irps <= j && j < irpe) {
+                printf("from warp %d, thread %d (warp-rel idx) is accessing %d\n", warp_global_index, thread_idx_in_warp, j);
                 row_shmem[threadIdx.x] += as[j] * x[ja[j]];
             }
         }
@@ -190,7 +195,26 @@ __global__ void __kernel_csr_v3(
     }
 }
 
-int main() {
+using core_cudakernel_csr_caller = 
+    std::function<void(
+        const uint64_t* irp,
+        const uint64_t* ja,
+        const double* as,
+        uint32_t m,
+        const double* x,
+        double* y,
+        cudaEvent_t* start, 
+        cudaEvent_t* stop)>;
+
+static double base_kernel_csr_caller_taketime(
+        const void *format, 
+        const union format_args *format_args, 
+        const char* mtxname,
+        const core_cudakernel_csr_caller cuda_kernel_caller) {
+
+    const struct csr_format *csr = (const struct csr_format *) format;
+
+    checkCudaErrors(cudaDeviceReset());
 
     int device_id;
     checkCudaErrors(cudaGetDevice(&device_id));
@@ -198,8 +222,102 @@ int main() {
     cudaDeviceProp device_props;
     checkCudaErrors(cudaGetDeviceProperties(&device_props, device_id));
 
-    cudaDeviceReset();
+    double *host_x = make_vector_of_doubles(format_args->csr.n);
 
+    uint64_t *dev_irp;
+    uint64_t *dev_ja;
+    double *dev_as;
+    double *dev_y;
+    double *dev_x;
+
+    size_t irp_size = sizeof(uint64_t) * (format_args->csr.m + 1);
+    size_t ja_size = sizeof(uint64_t) * (format_args->csr.nz);
+    size_t as_size = sizeof(double) * (format_args->csr.nz);
+    size_t y_size = sizeof(double) * (format_args->csr.m);
+    size_t x_size = sizeof(double) * (format_args->csr.n);
+
+    checkCudaErrors(cudaMalloc(&dev_irp, irp_size));
+    checkCudaErrors(cudaMalloc(&dev_ja, ja_size));
+    checkCudaErrors(cudaMalloc(&dev_as, as_size));
+    checkCudaErrors(cudaMalloc(&dev_y, y_size));
+    checkCudaErrors(cudaMalloc(&dev_x, x_size));
+
+    checkCudaErrors(cudaMemcpy(dev_irp, csr->irp, irp_size, cudaMemcpyHostToDevice));
+    checkCudaErrors(cudaMemcpy(dev_ja, csr->ja, ja_size, cudaMemcpyHostToDevice));
+    checkCudaErrors(cudaMemcpy(dev_as, csr->as, as_size, cudaMemcpyHostToDevice));
+    checkCudaErrors(cudaMemset(dev_y, 0, y_size));
+    checkCudaErrors(cudaMemcpy(dev_x, host_x, x_size, cudaMemcpyHostToDevice));
+    free_reset_ptr(host_x);
+
+    cudaEvent_t start;
+    cudaEvent_t stop;
+
+    checkCudaErrors(cudaEventCreate(&start));
+    checkCudaErrors(cudaEventCreate(&stop));
+
+    cuda_kernel_caller(dev_irp, dev_ja, dev_as, format_args->csr.m, dev_x, dev_y, &start, &stop);
+    
+    checkCudaErrors(cudaDeviceSynchronize());
+
+    float time_ms;
+    checkCudaErrors(cudaEventElapsedTime(&time_ms, start, stop));
+
+    checkCudaErrors(cudaEventDestroy(start));
+    checkCudaErrors(cudaEventDestroy(stop));
+
+    checkCudaErrors(cudaFree(dev_irp));
+    checkCudaErrors(cudaFree(dev_ja));
+    checkCudaErrors(cudaFree(dev_as));
+    checkCudaErrors(cudaFree(dev_x));
+
+    double *host_y = checked_calloc(double, format_args->csr.m);
+    checkCudaErrors(cudaMemcpy(host_y, dev_y, y_size, cudaMemcpyDeviceToHost));
+    checkCudaErrors(cudaFree(dev_y));
+
+    // use host_y
+
+    free_reset_ptr(host_y);
+
+    return time_ms / 1000;
+}
+
+static double kernel_csr_v1_caller_taketime(
+        const void *format, 
+        const union format_args *format_args, 
+        const char* mtxname) {
+
+    return base_kernel_csr_caller_taketime(
+        format, 
+        format_args, 
+        mtxname, 
+        [](auto, auto, auto, auto, auto, auto, auto, auto){});
+}
+
+static double kernel_csr_v2_caller_taketime(
+        const void *format, 
+        const union format_args *format_args, 
+        const char* mtxname) {
+
+    return base_kernel_csr_caller_taketime(
+        format, 
+        format_args, 
+        mtxname, 
+        [](auto, auto, auto, auto, auto, auto, auto, auto){});
+}
+
+static double kernel_csr_v3_caller_taketime(
+        const void *format, 
+        const union format_args *format_args, 
+        const char* mtxname) {
+
+    return base_kernel_csr_caller_taketime(
+        format, 
+        format_args, 
+        mtxname, 
+        [](auto, auto, auto, auto, auto, auto, auto, auto){});
+}
+
+int main() {
     int m = 48;
     int n = 48;
 
@@ -325,7 +443,7 @@ int main() {
     host_x[17] = 1;
     host_x[16] = 1;
     host_x[15] = 1;
-    host_x[14] = 1;
+    host_x[14] = 2;
 
     /* ---- */
 
@@ -351,6 +469,7 @@ int main() {
     checkCudaErrors(cudaMemcpy(dev_x, host_x, sizeof(host_x), cudaMemcpyHostToDevice));
     checkCudaErrors(cudaMemset(dev_y, 0, sizeof(double) * (m)));
 
+    /*
     auto csr_v3_dims = get_dims_for_csr_v3(m, device_props);
     ensure_device_capabilities_csr(csr_v3_dims, device_props);
 
@@ -363,15 +482,18 @@ int main() {
     checkCudaErrors(cudaEventRecord(start, 0));
     __kernel_csr_v3<<<std::get<0>(csr_v3_dims), std::get<1>(csr_v3_dims), std::get<2>(csr_v3_dims)>>>(dev_irp, dev_ja, dev_as, m, dev_x, dev_y);
     checkCudaErrors(cudaEventRecord(stop, 0));
+    */
 
     checkCudaErrors(cudaDeviceSynchronize());
 
+    /*
     float timeMs;
     checkCudaErrors(cudaEventElapsedTime(&timeMs, start, stop));
     std::cout << timeMs / 1000 << " s" << std::endl;
 
     checkCudaErrors(cudaEventDestroy(start));
     checkCudaErrors(cudaEventDestroy(stop));
+    */
 
     /*
     auto csr_v1_dims = get_dims_for_csr_v1(m, device_props);
