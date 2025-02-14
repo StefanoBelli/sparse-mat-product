@@ -7,8 +7,8 @@ fi
 
 dir="$1"
 
-for h_file in "$dir"/*_h.log; do
-    c_file="${h_file%_h.log}_c.log"
+for h_file in "$dir"/*_hll.csv; do
+    c_file="${h_file%_hll.csv}_csr.csv"
     
     if [ ! -f "$c_file" ]; then
         echo "missing $c_file"

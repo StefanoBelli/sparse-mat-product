@@ -1,14 +1,5 @@
 #define _POSIX_C_SOURCE 200809L
 
-//#define LOG_RESULTING_VECTOR
-
-#ifdef LOG_RESULTING_VECTOR
-#define LOG_Y_VECTOR(_mtxname, _ch, _m) \
-    log_resulting_vector_entries("serial", _mtxname, _ch, _m, y)
-#else
-#define LOG_Y_VECTOR(_mtxname, _ch, _m)
-#endif
-
 #include <utils.h>
 #include <executor.h>
 #include <matrix/format.h>
@@ -82,8 +73,8 @@ kernel_hll_caller_taketime(
     double start = hrt_get_time();
     __kernel_hll(blks, numblks, hs, m, x, y);
     double end = hrt_get_time();
-
-    LOG_Y_VECTOR(mtxname, 'h', format_args->hll.m);
+    
+    write_y_vector_to_csv("serial", mtxname, "hll", format_args->hll.m, y);
 
     free_reset_ptr(x);
     free_reset_ptr(y); 
@@ -111,7 +102,7 @@ kernel_csr_caller_taketime(
     __kernel_csr(irp, ja, as, m, x, y);
     double end = hrt_get_time();
 
-    LOG_Y_VECTOR(mtxname, 'c', format_args->csr.m);
+    write_y_vector_to_csv("serial", mtxname, "csr", format_args->csr.m, y);
 
     free_reset_ptr(x);
     free_reset_ptr(y);
