@@ -159,11 +159,9 @@ __global__ void __kernel_csr_v3(
 
     const int thread_idx_in_warp = threadIdx.x % warpSize;
 
-    const int load = nj / warpSize;
-
     row_shmem[threadIdx.x] = 0;
 
-    if(load <= 1) {
+    if(nj <= warpSize) {
         if(thread_idx_in_warp > nj + 1) {
             return;
         }
@@ -200,11 +198,140 @@ int main() {
     cudaDeviceProp device_props;
     checkCudaErrors(cudaGetDeviceProperties(&device_props, device_id));
 
-    uint64_t host_irp[] = { 0, 2, 4, 5, 7 };
-    uint64_t host_ja[] = { 0, 1, 1, 2, 2, 2, 3 };
-    double host_as[] = { 11, 12, 22, 23, 33, 43, 44 };
-    double host_x[] = { 1, 1, 1, 0 };
-    double host_y[] = { 0, 0, 0, 0 };
+    cudaDeviceReset();
+
+    int m = 48;
+    int n = 48;
+
+    struct coo_format coo[] = {
+        { .i = 0, .j = 0, .v = 1 },
+        { .i = 1, .j = 1, .v = 2 },
+        { .i = 2, .j = 2, .v = 3 },
+        { .i = 3, .j = 3, .v = 4 },
+        { .i = 4, .j = 4, .v = 5 },
+        { .i = 5, .j = 5, .v = 6 },
+        { .i = 6, .j = 6, .v = 1 },
+        { .i = 7, .j = 7, .v = 2 },
+        { .i = 8, .j = 8, .v = 3 },
+        { .i = 9, .j = 9, .v = 4 },
+        { .i = 10, .j = 10, .v = 5 },
+        { .i = 11, .j = 11, .v = 6 },
+        { .i = 12, .j = 12, .v = 1 },
+        { .i = 13, .j = 13, .v = 2 },
+        { .i = 14, .j = 14, .v = 3 },
+        { .i = 15, .j = 15, .v = 4 },
+        { .i = 16, .j = 16, .v = 5 },
+        { .i = 17, .j = 17, .v = 6 },
+        { .i = 18, .j = 18, .v = 1 },
+        { .i = 19, .j = 19, .v = 2 },
+        { .i = 20, .j = 20, .v = 3 },
+        { .i = 21, .j = 21, .v = 4 },
+        { .i = 22, .j = 22, .v = 5 },
+        { .i = 23, .j = 23, .v = 6 },
+        { .i = 24, .j = 24, .v = 1 },
+        { .i = 25, .j = 25, .v = 2 },
+        { .i = 26, .j = 26, .v = 3 },
+        { .i = 27, .j = 27, .v = 4 },
+        { .i = 28, .j = 28, .v = 5 },
+        { .i = 29, .j = 29, .v = 6 },
+        { .i = 30, .j = 30, .v = 1 },
+        { .i = 31, .j = 31, .v = 2 },
+        { .i = 32, .j = 32, .v = 3 },
+        { .i = 33, .j = 33, .v = 4 },
+        { .i = 34, .j = 34, .v = 5 },
+        { .i = 35, .j = 35, .v = 6 },
+        { .i = 36, .j = 36, .v = 1 },
+        { .i = 37, .j = 37, .v = 2 },
+        { .i = 38, .j = 38, .v = 3 },
+        { .i = 39, .j = 39, .v = 4 },
+        { .i = 40, .j = 40, .v = 5 },
+        { .i = 41, .j = 41, .v = 6 },
+        { .i = 42, .j = 42, .v = 1 },
+        { .i = 43, .j = 43, .v = 2 },
+        { .i = 44, .j = 44, .v = 3 },
+        { .i = 45, .j = 45, .v = 4 },
+        { .i = 46, .j = 46, .v = 5 },
+
+        { .i = 47, .j = 47, .v = 1 },
+        { .i = 47, .j = 46, .v = 1 },
+        { .i = 47, .j = 45, .v = 1 },
+        { .i = 47, .j = 44, .v = 1 },
+        { .i = 47, .j = 43, .v = 1 },
+        { .i = 47, .j = 42, .v = 1 },
+        { .i = 47, .j = 41, .v = 1 },
+        { .i = 47, .j = 40, .v = 1 },
+        { .i = 47, .j = 39, .v = 1 },
+        { .i = 47, .j = 38, .v = 1 },
+        { .i = 47, .j = 37, .v = 1 },
+        { .i = 47, .j = 36, .v = 1 },
+        { .i = 47, .j = 35, .v = 1 },
+        { .i = 47, .j = 34, .v = 1 },
+        { .i = 47, .j = 33, .v = 1 },
+        { .i = 47, .j = 32, .v = 1 },
+        { .i = 47, .j = 31, .v = 1 },
+        { .i = 47, .j = 30, .v = 1 },
+        { .i = 47, .j = 29, .v = 1 },
+        { .i = 47, .j = 28, .v = 1 },
+        { .i = 47, .j = 27, .v = 1 },
+        { .i = 47, .j = 26, .v = 1 },
+        { .i = 47, .j = 25, .v = 1 },
+        { .i = 47, .j = 24, .v = 1 },
+        { .i = 47, .j = 23, .v = 1 },
+        { .i = 47, .j = 22, .v = 1 },
+        { .i = 47, .j = 21, .v = 1 },
+        { .i = 47, .j = 20, .v = 1 },
+        { .i = 47, .j = 19, .v = 1 },
+        { .i = 47, .j = 18, .v = 1 },
+        { .i = 47, .j = 17, .v = 1 },
+        { .i = 47, .j = 16, .v = 1 },
+        { .i = 47, .j = 15, .v = 1 },
+        { .i = 47, .j = 14, .v = 1 },
+    };
+
+    double host_x[48];
+
+    memset(host_x, 0, sizeof(host_x));
+
+    host_x[47] = 1;
+    host_x[46] = 1;
+    host_x[45] = 1;
+    host_x[44] = 1;
+    host_x[43] = 1;
+    host_x[42] = 1;
+    host_x[41] = 1;
+    host_x[40] = 1;
+    host_x[39] = 1;
+    host_x[38] = 1;
+    host_x[37] = 1;
+    host_x[36] = 1;
+    host_x[35] = 1;
+    host_x[34] = 1;
+    host_x[33] = 1;
+    host_x[32] = 1;
+    host_x[31] = 1;
+    host_x[30] = 1;
+    host_x[29] = 1;
+    host_x[28] = 1;
+    host_x[27] = 1;
+    host_x[26] = 1;
+    host_x[25] = 1;
+    host_x[24] = 1;
+    host_x[23] = 1;
+    host_x[22] = 1;
+    host_x[21] = 1;
+    host_x[20] = 1;
+    host_x[19] = 1;
+    host_x[18] = 1;
+    host_x[17] = 1;
+    host_x[16] = 1;
+    host_x[15] = 1;
+    host_x[14] = 1;
+
+    /* ---- */
+
+    int nz = sizeof(coo) / sizeof(struct coo_format);
+    struct csr_format csr;
+    coo_to_csr(&csr, coo, nz, m);
 
     uint64_t *dev_irp;
     uint64_t *dev_ja;
@@ -212,26 +339,69 @@ int main() {
     double *dev_y;
     double *dev_x;
 
-    checkCudaErrors(cudaMalloc(&dev_irp, sizeof(uint64_t) * 5));
-    checkCudaErrors(cudaMalloc(&dev_ja, sizeof(uint64_t) * 7));
-    checkCudaErrors(cudaMalloc(&dev_as, sizeof(double) * 7));
-    checkCudaErrors(cudaMalloc(&dev_y, sizeof(double) * 4));
-    checkCudaErrors(cudaMalloc(&dev_x, sizeof(double) * 4));
+    checkCudaErrors(cudaMalloc(&dev_irp, sizeof(uint64_t) * (m + 1)));
+    checkCudaErrors(cudaMalloc(&dev_ja, sizeof(uint64_t) * (nz)));
+    checkCudaErrors(cudaMalloc(&dev_as, sizeof(double) * (nz)));
+    checkCudaErrors(cudaMalloc(&dev_y, sizeof(double) * (m)));
+    checkCudaErrors(cudaMalloc(&dev_x, sizeof(host_x)));
 
-    checkCudaErrors(cudaMemcpy(dev_irp, host_irp, sizeof(host_irp), cudaMemcpyHostToDevice));
-    checkCudaErrors(cudaMemcpy(dev_ja, host_ja, sizeof(host_ja), cudaMemcpyHostToDevice));
-    checkCudaErrors(cudaMemcpy(dev_as, host_as, sizeof(host_as), cudaMemcpyHostToDevice));
+    checkCudaErrors(cudaMemcpy(dev_irp, csr.irp, sizeof(uint64_t) * (m + 1), cudaMemcpyHostToDevice));
+    checkCudaErrors(cudaMemcpy(dev_ja, csr.ja, sizeof(uint64_t) * (nz), cudaMemcpyHostToDevice));
+    checkCudaErrors(cudaMemcpy(dev_as, csr.as, sizeof(double) * (nz), cudaMemcpyHostToDevice));
     checkCudaErrors(cudaMemcpy(dev_x, host_x, sizeof(host_x), cudaMemcpyHostToDevice));
-    checkCudaErrors(cudaMemset(dev_y, 0, sizeof(double) * 4));
+    checkCudaErrors(cudaMemset(dev_y, 0, sizeof(double) * (m)));
+
+    auto csr_v3_dims = get_dims_for_csr_v3(m, device_props);
+    ensure_device_capabilities_csr(csr_v3_dims, device_props);
+
+    cudaEvent_t start;
+    cudaEvent_t stop;
+
+    checkCudaErrors(cudaEventCreate(&start));
+    checkCudaErrors(cudaEventCreate(&stop));
+
+    checkCudaErrors(cudaEventRecord(start, 0));
+    __kernel_csr_v3<<<std::get<0>(csr_v3_dims), std::get<1>(csr_v3_dims), std::get<2>(csr_v3_dims)>>>(dev_irp, dev_ja, dev_as, m, dev_x, dev_y);
+    checkCudaErrors(cudaEventRecord(stop, 0));
+
+    checkCudaErrors(cudaDeviceSynchronize());
+
+    float timeMs;
+    checkCudaErrors(cudaEventElapsedTime(&timeMs, start, stop));
+    std::cout << timeMs / 1000 << " s" << std::endl;
+
+    checkCudaErrors(cudaEventDestroy(start));
+    checkCudaErrors(cudaEventDestroy(stop));
+
+    /*
+    auto csr_v1_dims = get_dims_for_csr_v1(m, device_props);
+    ensure_device_capabilities_csr(csr_v1_dims, device_props);
+    __kernel_csr_v1<<<csr_v1_dims.first,csr_v1_dims.second>>>(dev_irp, dev_ja, dev_as, m, dev_x, dev_y);
+    checkCudaErrors(cudaDeviceSynchronize());
+
+    auto csr_v2_dims = get_dims_for_csr_v2(m, device_props);
+    ensure_device_capabilities_csr(csr_v2_dims, device_props);
+    __kernel_csr_v2<<<csr_v2_dims.first,csr_v2_dims.second>>>(dev_irp, dev_ja, dev_as, m, dev_x, dev_y);
+    checkCudaErrors(cudaDeviceSynchronize());
+    */
+
 
     checkCudaErrors(cudaFree(dev_irp));
     checkCudaErrors(cudaFree(dev_ja));
     checkCudaErrors(cudaFree(dev_as));
     checkCudaErrors(cudaFree(dev_x));
 
-    checkCudaErrors(cudaMemcpy(host_y, dev_y, sizeof(double) * 4, cudaMemcpyDeviceToHost));
+    double host_y[m];
+
+    checkCudaErrors(cudaMemcpy(host_y, dev_y, sizeof(double) * (m), cudaMemcpyDeviceToHost));
 
     checkCudaErrors(cudaFree(dev_y));
+
+    puts("");
+    for(int i = 0; i < m; i++) {
+        printf("y[%d] = %lg\n", i, host_y[i]);
+    }
+    puts("");
 
     return 0;
 }
