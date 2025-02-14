@@ -299,13 +299,13 @@ static double kernel_csr_v1_caller_taketime(
             auto evstart, auto evstop){
                 auto dims = get_dims_for_csr_v1(m, devpr);
                 ensure_device_capabilities_csr(dims, devpr);
-                cudaEventRecord(evstart, 0);
+                checkCudaErrors(cudaEventRecord(evstart, 0));
                 __kernel_csr_v1<<<
                     std::get<0>(dims),
                     std::get<1>(dims)>>>
                     (irp, ja, as, m, x, y);
-                cudaEventRecord(evstop, 0);
-                cudaEventSynchronize(evstop);
+                checkCudaErrors(cudaEventRecord(evstop, 0));
+                checkCudaErrors(cudaEventSynchronize(evstop));
         });
 }
 
@@ -325,13 +325,13 @@ static double kernel_csr_v2_caller_taketime(
             auto evstart, auto evstop){
                 auto dims = get_dims_for_csr_v2(m, devpr);
                 ensure_device_capabilities_csr(dims, devpr);
-                cudaEventRecord(evstart, 0);
+                checkCudaErrors(cudaEventRecord(evstart, 0));
                 __kernel_csr_v2<<<
                     std::get<0>(dims), 
                     std::get<1>(dims)>>>
                     (irp, ja, as, m, x, y);
-                cudaEventRecord(evstop, 0);
-                cudaEventSynchronize(evstop);
+                checkCudaErrors(cudaEventRecord(evstop, 0));
+                checkCudaErrors(cudaEventSynchronize(evstop));
         });
 }
 
@@ -351,14 +351,14 @@ static double kernel_csr_v3_caller_taketime(
             auto evstart, auto evstop){
                 auto dims = get_dims_for_csr_v3(m, devpr);
                 ensure_device_capabilities_csr(dims, devpr);
-                cudaEventRecord(evstart, 0);
+                checkCudaErrors(cudaEventRecord(evstart, 0));
                 __kernel_csr_v3<<<
                     std::get<0>(dims), 
                     std::get<1>(dims), 
                     std::get<2>(dims)>>>
                     (irp, ja, as, m, x, y);
-                cudaEventRecord(evstop, 0);
-                cudaEventSynchronize(evstop);
+                checkCudaErrors(cudaEventRecord(evstop, 0));
+                checkCudaErrors(cudaEventSynchronize(evstop));
         });
 }
 
