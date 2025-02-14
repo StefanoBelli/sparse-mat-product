@@ -12,7 +12,7 @@ extern "C" {
 }
 
 void ensure_device_capabilities_csr(const std::pair<dim3, dim3>& dims, const cudaDeviceProp& device_props) {
-    if(dims.first.x > device_props.maxGridSize[0]) {
+    if(dims.first.x > (unsigned int) device_props.maxGridSize[0]) {
         std::cerr 
             << "device is unable to handle " 
             << dims.first.x 
@@ -23,7 +23,7 @@ void ensure_device_capabilities_csr(const std::pair<dim3, dim3>& dims, const cud
         exit(EXIT_FAILURE);
     }
 
-    if(dims.second.x > device_props.maxThreadsPerBlock) {
+    if(dims.second.x > (unsigned int) device_props.maxThreadsPerBlock) {
         std::cerr 
             << "device is unable to handle " 
             << dims.second.x 
@@ -195,22 +195,24 @@ __global__ void __kernel_csr_v3(
     }
 }
 
-using core_cudakernel_csr_caller = 
+// need to synchronize
+using core_cudakernel_csr_launcher = 
     std::function<void(
+        const cudaDeviceProp& devprop,
         const uint64_t* irp,
         const uint64_t* ja,
         const double* as,
         uint32_t m,
         const double* x,
         double* y,
-        cudaEvent_t* start, 
-        cudaEvent_t* stop)>;
+        cudaEvent_t& start, 
+        cudaEvent_t& stop)>;
 
 static double base_kernel_csr_caller_taketime(
         const void *format, 
         const union format_args *format_args, 
         const char* mtxname,
-        const core_cudakernel_csr_caller cuda_kernel_caller) {
+        const core_cudakernel_csr_launcher cuda_kernel_launcher) {
 
     const struct csr_format *csr = (const struct csr_format *) format;
 
@@ -255,10 +257,10 @@ static double base_kernel_csr_caller_taketime(
     checkCudaErrors(cudaEventCreate(&start));
     checkCudaErrors(cudaEventCreate(&stop));
 
-    cuda_kernel_caller(dev_irp, dev_ja, dev_as, format_args->csr.m, dev_x, dev_y, &start, &stop);
+    cuda_kernel_launcher(
+        device_props, dev_irp, dev_ja, dev_as, 
+        format_args->csr.m, dev_x, dev_y, start, stop);
     
-    checkCudaErrors(cudaDeviceSynchronize());
-
     float time_ms;
     checkCudaErrors(cudaEventElapsedTime(&time_ms, start, stop));
 
@@ -290,34 +292,78 @@ static double kernel_csr_v1_caller_taketime(
         format, 
         format_args, 
         mtxname, 
-        [](auto, auto, auto, auto, auto, auto, auto, auto){});
+        [](
+            auto devpr,
+            auto irp, auto ja, auto as, auto m, 
+            auto x, auto y, 
+            auto evstart, auto evstop){
+                auto dims = get_dims_for_csr_v1(m, devpr);
+                ensure_device_capabilities_csr(dims, devpr);
+                cudaEventRecord(evstart, 0);
+                __kernel_csr_v1<<<
+                    std::get<0>(dims),
+                    std::get<1>(dims)>>>
+                    (irp, ja, as, m, x, y);
+                cudaEventRecord(evstop, 0);
+                cudaEventSynchronize(evstop);
+        });
 }
 
 static double kernel_csr_v2_caller_taketime(
         const void *format, 
         const union format_args *format_args, 
         const char* mtxname) {
-
+            
     return base_kernel_csr_caller_taketime(
         format, 
         format_args, 
         mtxname, 
-        [](auto, auto, auto, auto, auto, auto, auto, auto){});
+        [](
+            auto devpr,
+            auto irp, auto ja, auto as, auto m, 
+            auto x, auto y, 
+            auto evstart, auto evstop){
+                auto dims = get_dims_for_csr_v2(m, devpr);
+                ensure_device_capabilities_csr(dims, devpr);
+                cudaEventRecord(evstart, 0);
+                __kernel_csr_v2<<<
+                    std::get<0>(dims), 
+                    std::get<1>(dims)>>>
+                    (irp, ja, as, m, x, y);
+                cudaEventRecord(evstop, 0);
+                cudaEventSynchronize(evstop);
+        });
 }
 
 static double kernel_csr_v3_caller_taketime(
         const void *format, 
         const union format_args *format_args, 
         const char* mtxname) {
-
+            
     return base_kernel_csr_caller_taketime(
         format, 
         format_args, 
         mtxname, 
-        [](auto, auto, auto, auto, auto, auto, auto, auto){});
+        [](
+            auto devpr,
+            auto irp, auto ja, auto as, auto m, 
+            auto x, auto y, 
+            auto evstart, auto evstop){
+                auto dims = get_dims_for_csr_v3(m, devpr);
+                ensure_device_capabilities_csr(dims, devpr);
+                cudaEventRecord(evstart, 0);
+                __kernel_csr_v3<<<
+                    std::get<0>(dims), 
+                    std::get<1>(dims), 
+                    std::get<2>(dims)>>>
+                    (irp, ja, as, m, x, y);
+                cudaEventRecord(evstop, 0);
+                cudaEventSynchronize(evstop);
+        });
 }
 
 int main() {
+    /*
     int m = 48;
     int n = 48;
 
@@ -445,85 +491,7 @@ int main() {
     host_x[15] = 1;
     host_x[14] = 2;
 
-    /* ---- */
-
-    int nz = sizeof(coo) / sizeof(struct coo_format);
-    struct csr_format csr;
-    coo_to_csr(&csr, coo, nz, m);
-
-    uint64_t *dev_irp;
-    uint64_t *dev_ja;
-    double *dev_as;
-    double *dev_y;
-    double *dev_x;
-
-    checkCudaErrors(cudaMalloc(&dev_irp, sizeof(uint64_t) * (m + 1)));
-    checkCudaErrors(cudaMalloc(&dev_ja, sizeof(uint64_t) * (nz)));
-    checkCudaErrors(cudaMalloc(&dev_as, sizeof(double) * (nz)));
-    checkCudaErrors(cudaMalloc(&dev_y, sizeof(double) * (m)));
-    checkCudaErrors(cudaMalloc(&dev_x, sizeof(host_x)));
-
-    checkCudaErrors(cudaMemcpy(dev_irp, csr.irp, sizeof(uint64_t) * (m + 1), cudaMemcpyHostToDevice));
-    checkCudaErrors(cudaMemcpy(dev_ja, csr.ja, sizeof(uint64_t) * (nz), cudaMemcpyHostToDevice));
-    checkCudaErrors(cudaMemcpy(dev_as, csr.as, sizeof(double) * (nz), cudaMemcpyHostToDevice));
-    checkCudaErrors(cudaMemcpy(dev_x, host_x, sizeof(host_x), cudaMemcpyHostToDevice));
-    checkCudaErrors(cudaMemset(dev_y, 0, sizeof(double) * (m)));
-
-    /*
-    auto csr_v3_dims = get_dims_for_csr_v3(m, device_props);
-    ensure_device_capabilities_csr(csr_v3_dims, device_props);
-
-    cudaEvent_t start;
-    cudaEvent_t stop;
-
-    checkCudaErrors(cudaEventCreate(&start));
-    checkCudaErrors(cudaEventCreate(&stop));
-
-    checkCudaErrors(cudaEventRecord(start, 0));
-    __kernel_csr_v3<<<std::get<0>(csr_v3_dims), std::get<1>(csr_v3_dims), std::get<2>(csr_v3_dims)>>>(dev_irp, dev_ja, dev_as, m, dev_x, dev_y);
-    checkCudaErrors(cudaEventRecord(stop, 0));
     */
-
-    checkCudaErrors(cudaDeviceSynchronize());
-
-    /*
-    float timeMs;
-    checkCudaErrors(cudaEventElapsedTime(&timeMs, start, stop));
-    std::cout << timeMs / 1000 << " s" << std::endl;
-
-    checkCudaErrors(cudaEventDestroy(start));
-    checkCudaErrors(cudaEventDestroy(stop));
-    */
-
-    /*
-    auto csr_v1_dims = get_dims_for_csr_v1(m, device_props);
-    ensure_device_capabilities_csr(csr_v1_dims, device_props);
-    __kernel_csr_v1<<<csr_v1_dims.first,csr_v1_dims.second>>>(dev_irp, dev_ja, dev_as, m, dev_x, dev_y);
-    checkCudaErrors(cudaDeviceSynchronize());
-
-    auto csr_v2_dims = get_dims_for_csr_v2(m, device_props);
-    ensure_device_capabilities_csr(csr_v2_dims, device_props);
-    __kernel_csr_v2<<<csr_v2_dims.first,csr_v2_dims.second>>>(dev_irp, dev_ja, dev_as, m, dev_x, dev_y);
-    checkCudaErrors(cudaDeviceSynchronize());
-    */
-
-
-    checkCudaErrors(cudaFree(dev_irp));
-    checkCudaErrors(cudaFree(dev_ja));
-    checkCudaErrors(cudaFree(dev_as));
-    checkCudaErrors(cudaFree(dev_x));
-
-    double host_y[m];
-
-    checkCudaErrors(cudaMemcpy(host_y, dev_y, sizeof(double) * (m), cudaMemcpyDeviceToHost));
-
-    checkCudaErrors(cudaFree(dev_y));
-
-    puts("");
-    for(int i = 0; i < m; i++) {
-        printf("y[%d] = %lg\n", i, host_y[i]);
-    }
-    puts("");
 
     return 0;
 }
