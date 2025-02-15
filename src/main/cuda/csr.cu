@@ -13,7 +13,7 @@ dims_type get_dims_for_csr_v1(
     }
 
     double splsz = nrows / max_thr_per_blk;
-    int xgridsz = nrows % max_thr_per_blk ? ceil(splsz) + 1 : splsz;
+    int xgridsz = nrows % max_thr_per_blk ? std::ceil(splsz) + 1 : splsz;
 
     dim3 grid_dim(xgridsz, 1);
     dim3 block_dim(max_thr_per_blk, 1);
@@ -56,7 +56,7 @@ dims_type get_dims_for_csr_v2(
     }
 
     double splsz = nrows * warp_size / max_thr_per_blk;
-    int xgridsz = (nrows * warp_size) % max_thr_per_blk ? ceil(splsz) + 1 : splsz;
+    int xgridsz = (nrows * warp_size) % max_thr_per_blk ? std::ceil(splsz) + 1 : splsz;
 
     dim3 grid_dim(xgridsz, 1);
     dim3 block_dim(max_thr_per_blk, 1);
@@ -123,23 +123,10 @@ __global__ void __kernel_csr_v3(
 
     row_shmem[threadIdx.x] = 0;
 
-    if(nj <= warpSize) {
-        if(thread_idx_in_warp > nj + 1) {
-            return;
-        }
-
-        const int j = warp_global_index + thread_idx_in_warp;
-
-        if(irps <= j && j < irpe) {
-            row_shmem[threadIdx.x] = as[j] * x[ja[j]];
-        }
-    } else {
-        for(int i = thread_idx_in_warp; i < nj; i += warpSize) {
-            const int j = warp_global_index + i;
-            if(irps <= j && j < irpe) {
-                //printf("from warp %d, thread %d (warp-rel idx) is accessing %d\n", warp_global_index, thread_idx_in_warp, j);
-                row_shmem[threadIdx.x] += as[j] * x[ja[j]];
-            }
+    for(int i = thread_idx_in_warp; i < nj; i += warpSize) {
+        const int j = irps + i;
+        if(j < irpe) {
+            row_shmem[threadIdx.x] += as[j] * x[ja[j]];
         }
     }
 
