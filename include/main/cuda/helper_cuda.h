@@ -38,7 +38,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include <cuda/helper_string.h> // <-- CHANGED
+#include <main/cuda/helper_string.h> // <-- CHANGED
 
 #ifndef EXIT_WAIVED
 #define EXIT_WAIVED 2

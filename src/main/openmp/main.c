@@ -4,64 +4,16 @@
 #error This code requires OpenMP support (-fopenmp with GCC)
 #endif
 
-#include <unistd.h>
-
 #include <omp.h>
+
+#include <unistd.h>
 
 #include <utils.h>
 #include <executor.h>
 #include <matrix/format.h>
 
-static void __kernel_csr(
-        const uint64_t *irp, 
-        const uint64_t *ja, 
-        const double *as, 
-        uint32_t m, 
-        const double *x, 
-        double *y) {
- 
-#pragma omp parallel for schedule(static)
-    for(uint64_t i = 0; i < m; i++) {
-        double t = 0;
-        for(uint64_t j = irp[i]; j < irp[i + 1]; j++) {
-            t += as[j] * x[ja[j]];
-        }
-        y[i] = t;
-    }
-}
-
-static void __kernel_hll(
-        const struct ellpack_format *blks, 
-        uint64_t numblks, 
-        uint32_t hs, 
-        uint32_t m, 
-        const double *x, 
-        double *y) {
-
-#pragma omp parallel for schedule(dynamic)
-    for(uint64_t numblk = 0; numblk < numblks; numblk++) {
-        double t[hs];
-
-        struct ellpack_format ell = blks[numblk];
-
-        for(uint64_t i = 0; i < hs; i++) {
-            double ell_tmp = 0;
-            for(uint64_t j = 0; j < ell.maxnz; j++) {
-                ell_tmp += ell.as[i][j] * x[ell.ja[i][j]];
-            }
-            t[i] = ell_tmp;
-        }
-
-        uint64_t endrow = hs;
-        if (numblk * hs + hs > m) {
-            endrow = m - numblk * hs;
-        }
-
-        for(uint64_t i = 0; i < endrow; i++) {
-            y[i + numblk * hs] = t[i];
-        }
-    }
-}
+#include <main/openmp/csr.h>
+#include <main/openmp/hll.h>
 
 static double 
 kernel_hll_caller_taketime(

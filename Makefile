@@ -16,7 +16,8 @@ BIN_OPENMP=sparse-mat-product-openmp
 BIN_CUDA=sparse-mat-product-cuda
 
 CC=$(shell which gcc)
-NVCC=$(shell which nvcc) -ccbin='$(CC)'
+CXX=$(shell which g++)
+NVCC=$(shell which nvcc) -ccbin='$(CXX)'
 
 INCLUDES=include/
 CFLAGS=-Wall -W -Wextra -Wshadow -march=native -I$(INCLUDES)
@@ -155,7 +156,7 @@ $(OPENMP_SPECIFIC_OBJ_FILES): %.o: %.c
  
 $(CUDA_CU_SPECIFIC_OBJ_FILES): %.o: %.cu
 	@printf '\tCC $<\n'
-	@$(NVCC) $(NVCC_CFLAGS) -Xcompiler="$(CFLAGS) $(NVCC_CC_CFLAGS)" -c $< -o $@
+	@$(NVCC) $(NVCC_CFLAGS) --std=c++11 -Xcompiler="$(CFLAGS) $(NVCC_CC_CFLAGS)" -c $< -o $@
 
 cppcheck:
 	cppcheck \
