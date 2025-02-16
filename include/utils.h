@@ -9,6 +9,8 @@
 #include <errno.h>
 #include <sys/stat.h>
 
+#include <executor.h>
+
 #define checked_malloc(ty, ne) ({ \
     ty* ptr = (ty*) malloc(sizeof(ty) * (ne)); \
     if(ptr == NULL) { \
@@ -77,6 +79,13 @@ double *make_vector_of_doubles(uint64_t nelems);
     _time; \
 })
 
-void write_y_vector_to_csv(const char* runner, const char* mtxname, const char* mtxformat, uint64_t m, double* y);
+void write_y_vector_to_csv(
+    const char* runner,
+    const char* variant,
+    mult_datatype mdt,
+    const char* mtxname, 
+    const char* mtxformat, 
+    uint64_t m, 
+    double* y);
 
 #endif

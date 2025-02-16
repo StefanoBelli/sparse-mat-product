@@ -1,6 +1,5 @@
 #include <iostream>
 #include <functional>
-#include <cmath>
 
 #include <main/cuda/helper_cuda.h>
 #include <main/cuda/csr.h>
@@ -88,7 +87,8 @@ base_kernel_csr_caller_taketime(
         const union format_args *format_args, 
         const char* mtxname,
         const cudakernel_csr_launcher_cb& cuda_kernel_launcher,
-        const char* variant) {
+        const char* variant,
+        mult_datatype multiply_datatype) {
 
     const struct csr_format *csr = (const struct csr_format *) format;
 
@@ -152,9 +152,7 @@ base_kernel_csr_caller_taketime(
     checkCudaErrors(cudaMemcpy(host_y, dev_y, y_size, cudaMemcpyDeviceToHost));
     checkCudaErrors(cudaFree(dev_y));
 
-    char mtxnamebuf[PATH_MAX];
-    snprintf(mtxnamebuf, PATH_MAX, "%s-%s", mtxname, variant);
-    write_y_vector_to_csv("gpu", mtxnamebuf, "csr", format_args->csr.m, host_y);
+    write_y_vector_to_csv("gpu", variant, multiply_datatype, mtxname, "csr", format_args->csr.m, host_y);
 
     free_reset_ptr(host_y);
 
@@ -181,6 +179,7 @@ base_kernel_csr_caller_taketime_with_launcher(
         const union format_args *format_args, 
         const char* mtxname,
         const char* variant,
+        const mult_datatype multiply_datatype,
         const get_dims_for_csr_cb& get_dims_for_csr,
         const cudakernel_csr_call_wrapper_cb& cudakernel) {
 
@@ -198,17 +197,21 @@ base_kernel_csr_caller_taketime_with_launcher(
                             evstart, evstop, dims);
                 checkCudaErrors(cudaEventSynchronize(evstop));
         },
-        variant);
+        variant,
+        multiply_datatype);
 }
 
 static double 
 kernel_csr_v1_caller_taketime(
         const void* format, 
         const union format_args *format_args, 
-        const char* mtxname) {
+        const char* mtxname,
+        mult_datatype multiply_datatype,
+        const char* variant) {
 
     return base_kernel_csr_caller_taketime_with_launcher(
-        format, format_args, mtxname, "v1", get_dims_for_csr_v1,
+        format, format_args, mtxname, variant, multiply_datatype,
+        get_dims_for_csr_v1,
         [](CUDAKERNEL_WRAPPER_CSR_ARGLIST) {
             checkCudaErrors(cudaEventRecord(evstart));
             __kernel_csr_v1<<<
@@ -225,10 +228,13 @@ static double
 kernel_csr_v2_caller_taketime(
         const void* format, 
         const union format_args *format_args, 
-        const char* mtxname) {
+        const char* mtxname,
+        mult_datatype multiply_datatype,
+        const char* variant) {
 
     return base_kernel_csr_caller_taketime_with_launcher(
-        format, format_args, mtxname, "v2", get_dims_for_csr_v2,
+        format, format_args, mtxname, variant, multiply_datatype,
+        get_dims_for_csr_v2,
         [](CUDAKERNEL_WRAPPER_CSR_ARGLIST) {
             checkCudaErrors(cudaEventRecord(evstart));
             __kernel_csr_v2<<<
@@ -245,10 +251,13 @@ static double
 kernel_csr_v3_caller_taketime(
         const void* format, 
         const union format_args *format_args, 
-        const char* mtxname) {
+        const char* mtxname,
+        mult_datatype multiply_datatype,
+        const char* variant) {
 
     return base_kernel_csr_caller_taketime_with_launcher(
-        format, format_args, mtxname, "v3", get_dims_for_csr_v3,
+        format, format_args, mtxname, variant, multiply_datatype,
+        get_dims_for_csr_v3,
         [](CUDAKERNEL_WRAPPER_CSR_ARGLIST) {
             checkCudaErrors(cudaEventRecord(evstart));
             __kernel_csr_v3<<<
@@ -264,21 +273,28 @@ kernel_csr_v3_caller_taketime(
 #undef CUDAKERNEL_LAUNCHER_CSR_ARGLIST
 
 int main(int argc, char** argv) {
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wmissing-field-initializers"
+
     struct kernel_execution_info kexi[3] = {
         {
             .kernel_time_meter = kernel_csr_v1_caller_taketime,
             .format = CSR,
-            .multiply_datatype = FLOAT64
+            .multiply_datatype = FLOAT64,
+            .variant_name = "v1"
         },
         {
             .kernel_time_meter = kernel_csr_v2_caller_taketime,
             .format = CSR,
-            .multiply_datatype = FLOAT64
+            .multiply_datatype = FLOAT64,
+            .variant_name = "v2"
         },
         {
             .kernel_time_meter = kernel_csr_v3_caller_taketime,
             .format = CSR,
-            .multiply_datatype = FLOAT64
+            .multiply_datatype = FLOAT64,
+            .variant_name = "v3"
         },
     };
 
@@ -287,6 +303,8 @@ int main(int argc, char** argv) {
         .nkexs = 3,
         .runner = GPU,
     };
+
+#pragma GCC diagnostic pop
 
     run_executor(argc, argv, &eargs);
     return EXIT_SUCCESS;

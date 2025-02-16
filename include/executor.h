@@ -42,10 +42,12 @@ union format_args {
  * first arg is matrix in whatever format (explicit cast needed)
  * and second arg are matrix args (explicit cast needed)
  */
-typedef double (*kernel_time_meter_fp)(const void*, const union format_args*, const char*);
 typedef enum mult_datatype mult_datatype;
 typedef enum matrix_format matrix_format;
 typedef enum runner_type runner_type;
+typedef double (*kernel_time_meter_fp)(
+    const void*, const union format_args*, 
+    const char*, mult_datatype, const char*);
 
 struct kernel_execution_info {
     kernel_time_meter_fp kernel_time_meter;  /* kernel time meter function pointer, needed */
@@ -53,6 +55,7 @@ struct kernel_execution_info {
     uint32_t cpu_mt_numthreads;              /* self-explainatory, data collection, set nthreads when cpu_mt */
     uint32_t hll_hack_size;                  /* self-explainatory, data collection, set hacksize when hll */
     mult_datatype multiply_datatype;         /* multiplication datatype, data collection */
+    const char* variant_name;                /* name of the kernel variant, cchar* provides more freedom */
 };
 
 /* 

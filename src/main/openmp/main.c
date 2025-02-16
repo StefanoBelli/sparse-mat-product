@@ -19,7 +19,9 @@ static double
 kernel_hll_caller_taketime(
         const void *format, 
         const union format_args *format_args, 
-        const char *mtxname) {
+        const char *mtxname,
+        mult_datatype multiply_datatype,
+        const char* variant) {
 
     const struct hll_format *hll = (const struct hll_format*) format;
 
@@ -37,7 +39,7 @@ kernel_hll_caller_taketime(
     double end = hrt_get_time();
 
     if(omp_get_max_threads() == 2) { 
-        write_y_vector_to_csv("omp", mtxname, "hll", format_args->hll.m, y);
+        write_y_vector_to_csv("omp", variant, multiply_datatype, mtxname, "hll", format_args->hll.m, y);
     }
 
     free_reset_ptr(x);
@@ -50,7 +52,9 @@ static double
 kernel_csr_caller_taketime(
         const void *format, 
         const union format_args *format_args, 
-        const char* mtxname) {
+        const char* mtxname,
+        mult_datatype multiply_datatype,
+        const char* variant) {
 
     const struct csr_format *csr = (const struct csr_format*) format;
 
@@ -67,7 +71,7 @@ kernel_csr_caller_taketime(
     double end = hrt_get_time();
 
     if(omp_get_max_threads() == 2) { 
-        write_y_vector_to_csv("omp", mtxname, "csr", format_args->csr.m, y);
+        write_y_vector_to_csv("omp", variant, multiply_datatype, mtxname, "csr", format_args->csr.m, y);
     }
 
     free_reset_ptr(x);
@@ -98,6 +102,7 @@ int main(int argc, char** argv) {
         kexi[i - 1].format = CSR;
         kexi[i - 1].multiply_datatype = FLOAT64;
         kexi[i - 1].cpu_mt_numthreads = i;
+        kexi[i - 1].variant_name = NULL;
     }
 
     for(uint32_t i = ncores + 1; i <= 2 * ncores; i++) {
@@ -106,6 +111,7 @@ int main(int argc, char** argv) {
         kexi[i - 1].multiply_datatype = FLOAT64;
         kexi[i - 1].hll_hack_size = 1024;
         kexi[i - 1].cpu_mt_numthreads = i - ncores;
+        kexi[i - 1].variant_name = NULL;
     }
 
     struct executor_args eargs = {

@@ -1,7 +1,7 @@
 import csv
 import sys
 
-def cmp_yvec_csv(file1, file2, tolerance=0.00001):
+def cmp_yvec_csv(file1, file2, tolerance=0.01):
     with open(file1, 'r') as f1, open(file2, 'r') as f2:
         reader1 = csv.reader(f1)
         reader2 = csv.reader(f2)

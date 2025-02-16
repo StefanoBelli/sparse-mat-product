@@ -157,7 +157,7 @@ static FILE
     snprintf(filename_buf, PATH_MAX, "results/%s_%s.csv", llist->name, runner_to_string(runner));
     restore_matrix_name(ptr);
     FILE *mtxresfp = checked_fopen_writetrunc(filename_buf);
-    fputs_force_flush(mtxresfp, "id,format,hack_size,cpu_mt_nthreads,time_it_took\n");
+    fputs_force_flush(mtxresfp, "id,format,variant,is_fp64,hack_size,cpu_mt_nthreads,time_it_took\n");
 
     return mtxresfp;
 }
@@ -176,9 +176,11 @@ write_result_csv_entry(
         real_num_threads = 1;
     }
 
-    fprintf_force_flush(fp, "%d,%s,%d,%d,%lg\n", 
-                            id, 
+    fprintf_force_flush(fp, "%d,%s,%s,%d,%d,%d,%lg\n", 
+                            id,
                             kexinfo->format == CSR ? "csr" : "hll",
+                            kexinfo->variant_name == NULL ? "v1" : kexinfo->variant_name,
+                            kexinfo->multiply_datatype == FLOAT64 ? 1 : 0,
                             kexinfo->format == HLL ? fargs->hll.hs : 0,
                             runner == CPU_MT ? real_num_threads : 0,
                             time);
@@ -227,7 +229,10 @@ void run_executor(int argc, char **argv, const struct executor_args *exe_args) {
 
                 for(int i = 0; i < num_trials; i++) {
                     char* _mtx_ptr = get_matrix_name(head);
-                    times[i] = exe_args->kexinfos[k].kernel_time_meter(fmt_mtx, &args, head->name);
+                    times[i] = exe_args->kexinfos[k].kernel_time_meter(
+                        fmt_mtx, &args, head->name, 
+                        exe_args->kexinfos[k].multiply_datatype,
+                        exe_args->kexinfos[k].variant_name);
                     restore_matrix_name(_mtx_ptr);
 
                     write_result_csv_entry(mtxresfp, global_id++, times[i], 

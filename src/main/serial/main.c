@@ -11,7 +11,9 @@ static double
 kernel_hll_caller_taketime(
         const void *format, 
         const union format_args *format_args, 
-        const char *mtxname) {
+        const char *mtxname,
+        mult_datatype multiply_datatype,
+        const char* variant) {
 
     const struct hll_format *hll = (const struct hll_format*) format;
 
@@ -28,7 +30,7 @@ kernel_hll_caller_taketime(
     __kernel_hll(blks, numblks, hs, m, x, y);
     double end = hrt_get_time();
     
-    write_y_vector_to_csv("serial", mtxname, "hll", format_args->hll.m, y);
+    write_y_vector_to_csv("serial", variant, multiply_datatype, mtxname, "hll", format_args->hll.m, y);
 
     free_reset_ptr(x);
     free_reset_ptr(y); 
@@ -40,7 +42,9 @@ static double
 kernel_csr_caller_taketime(
         const void *format, 
         const union format_args *format_args, 
-        const char* mtxname) {
+        const char* mtxname,
+        mult_datatype multiply_datatype,
+        const char* variant) {
 
     const struct csr_format *csr = (const struct csr_format*) format;
 
@@ -56,7 +60,7 @@ kernel_csr_caller_taketime(
     __kernel_csr(irp, ja, as, m, x, y);
     double end = hrt_get_time();
 
-    write_y_vector_to_csv("serial", mtxname, "csr", format_args->csr.m, y);
+    write_y_vector_to_csv("serial", variant, multiply_datatype, mtxname, "csr", format_args->csr.m, y);
 
     free_reset_ptr(x);
     free_reset_ptr(y);
@@ -69,13 +73,15 @@ int main(int argc, char** argv) {
         {
             .kernel_time_meter = kernel_csr_caller_taketime,
             .format = CSR,
-            .multiply_datatype = FLOAT64
+            .multiply_datatype = FLOAT64,
+            .variant_name = NULL
         },
         {
             .kernel_time_meter = kernel_hll_caller_taketime,
             .format = HLL,
             .multiply_datatype = FLOAT64,
             .hll_hack_size = 1024,
+            .variant_name = NULL
         }
     };
 

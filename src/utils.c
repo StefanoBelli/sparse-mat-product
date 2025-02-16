@@ -1,3 +1,4 @@
+#include <executor.h>
 #include <utils.h>
 #include <linux/limits.h>
 
@@ -13,14 +14,14 @@ double *make_vector_of_doubles(uint64_t nelems) {
 
 #define mkvecentdir(name) mkcachedir(name)
 
-static void log_resulting_vector_entries(const char* basedir, const char* mtxname, const char* mtxformat, uint64_t m, double* y) {
+static void log_resulting_vector_entries(const char* basedir, const char* mtxname, uint64_t m, double* y) {
     mkvecentdir(basedir);
 
     char buf[PATH_MAX];
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wformat-truncation"
-    snprintf(buf, PATH_MAX, "%s/%s_%s.csv", basedir, mtxname, mtxformat);
+    snprintf(buf, PATH_MAX, "%s/%s", basedir, mtxname);
 #pragma GCC diagnostic pop
 
     FILE *f = fopen(buf, "w");
@@ -40,19 +41,47 @@ static void log_resulting_vector_entries(const char* basedir, const char* mtxnam
 
 #undef mkvecentdir
 
-void write_y_vector_to_csv(const char* runner, const char* mtxname, const char* mtxformat, uint64_t m, double* y) {
+void write_y_vector_to_csv(
+        const char* runner,
+        const char* variant,
+        mult_datatype mdt,
+        const char* mtxname, 
+        const char* mtxformat, 
+        uint64_t m, 
+        double* y) {
+
     static char current_mtx[PATH_MAX] = { 0 };
     static char current_format[PATH_MAX] = { 0 };
+    static const char* current_variant = 0;
+    static mult_datatype current_mdt = FLOAT64;
 
-    if(strcmp(current_mtx, mtxname) || strcmp(current_format, mtxformat)) {
-        printf(" \t\t>>> y logger: matrix or its format has changed: %s %s\n", mtxname, mtxformat);
+    if(
+            strcmp(current_mtx, mtxname) || 
+            strcmp(current_format, mtxformat) ||
+            current_variant != variant || // careful here, this works bc variant is a string in a "rodata" section
+            current_mdt != mdt) {
+
+        printf(" \t\t>>> y logger: matrix, its format, variant or datatype has changed: %s %s %s %s\n", 
+            mtxname, 
+            mtxformat, 
+            variant == NULL ? "v1" : variant, 
+            mdt == FLOAT64 ? "fp64" : "fp32");
 
         char pathbuf[PATH_MAX];
         snprintf(pathbuf, PATH_MAX, "yvector-%s", runner);
 
-        log_resulting_vector_entries(pathbuf, mtxname, mtxformat, m, y);
+        char filename[PATH_MAX];
+        snprintf(filename, PATH_MAX, "%s_%s_%s_%s.csv", 
+            mtxname, 
+            mtxformat, 
+            variant == NULL ? "v1" : variant, 
+            mdt == FLOAT64 ? "fp64" : "fp32");
+
+        log_resulting_vector_entries(pathbuf, filename, m, y);
 
         snprintf(current_mtx, PATH_MAX, "%s", mtxname);
         snprintf(current_format, PATH_MAX, "%s", mtxformat);
+        current_variant = variant;
+        current_mdt = mdt;
     }
 }
