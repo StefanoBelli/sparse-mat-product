@@ -1,10 +1,9 @@
 #ifndef CSR_CUDA_H
 #define CSR_CUDA_H
 
-#include <tuple>
 #include <cstdint>
 
-using dims_type = std::tuple<dim3, dim3, size_t>;
+#include <main/cuda/dims_type.h>
 
 dims_type get_dims_for_csr_v1(int, const cudaDeviceProp&);
 __global__ void __kernel_csr_v1(

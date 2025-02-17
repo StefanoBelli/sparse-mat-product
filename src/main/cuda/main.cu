@@ -10,6 +10,9 @@ extern "C" {
 #include <utils.h>
 }
 
+/**
+ * CSR launchers
+ */
 using cudakernel_csr_launcher_cb = 
     std::function<void(
         const cudaDeviceProp& devprop,
@@ -269,15 +272,75 @@ kernel_csr_v3_caller_taketime(
         }
     );
 }
+
 #undef CUDAKERNEL_WRAPPER_CSR_ARGLIST
 #undef CUDAKERNEL_LAUNCHER_CSR_ARGLIST
+
+/**
+ * HLL launcher
+ */
+
+
+using cudakernel_hll_launcher_cb = 
+    std::function<void(
+        const cudaDeviceProp& devprop,
+        const struct ellpack_format* blks,
+        uint64_t numblks,
+        uint32_t hs,
+        uint32_t m,
+        const double* x,
+        double* y,
+        const cudaEvent_t& start, 
+        const cudaEvent_t& stop)>;
+
+static void
+base_kernel_hll_caller_taketime(
+        const void *format, 
+        const union format_args *format_args, 
+        const char* mtxname,
+        const cudakernel_hll_launcher_cb& cuda_kernel_launcher,
+        const char* variant,
+        mult_datatype multiply_datatype) {
+
+    const struct hll_format *old_hll = (const struct hll_format*) format;
+
+    struct hll_format hll;
+    transpose_hll(&hll, old_hll, format_args->hll.hs);
+
+    free_hll_format(&hll, format_args->hll.hs);
+}
+
+
+static double 
+test(
+        const void* format,
+        const union format_args *format_args,
+        const char* e,
+        mult_datatype m,
+        const char* v) {
+
+    const struct hll_format *old_hll = (const struct hll_format*) format;
+
+    struct hll_format hll;
+    transpose_hll(&hll, old_hll, format_args->hll.hs);
+
+    free_transposed_hll_format(&hll);
+
+    return 0;
+        }
 
 int main(int argc, char** argv) {
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wmissing-field-initializers"
 
-    struct kernel_execution_info kexi[3] = {
+    struct kernel_execution_info kexi[1] = {
+        {
+            .kernel_time_meter = test,
+            .format = HLL,
+            .multiply_datatype = FLOAT64,
+        }
+        /*
         {
             .kernel_time_meter = kernel_csr_v1_caller_taketime,
             .format = CSR,
@@ -296,11 +359,12 @@ int main(int argc, char** argv) {
             .multiply_datatype = FLOAT64,
             .variant_name = "v3"
         },
+        */
     };
 
     struct executor_args eargs = {
         .kexinfos = kexi,
-        .nkexs = 3,
+        .nkexs = 1,
         .runner = GPU,
     };
 
