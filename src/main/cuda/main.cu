@@ -3,6 +3,7 @@
 
 #include <main/cuda/helper_cuda.h>
 #include <main/cuda/csr.h>
+#include <main/cuda/hll.h>
 
 extern "C" {
 #include <matrix/format.h>
@@ -280,11 +281,14 @@ kernel_csr_v3_caller_taketime(
  * HLL launcher
  */
 
-
 using cudakernel_hll_launcher_cb = 
     std::function<void(
         const cudaDeviceProp& devprop,
-        const struct ellpack_format* blks,
+        const double **as,
+        const uint64_t **ja,
+        const uint64_t *maxnzs,
+        const size_t *pitches_as,
+        const size_t *pitches_ja,
         uint64_t numblks,
         uint32_t hs,
         uint32_t m,
@@ -293,7 +297,35 @@ using cudakernel_hll_launcher_cb =
         const cudaEvent_t& start, 
         const cudaEvent_t& stop)>;
 
-static void
+using get_dims_for_hll_cb =
+    std::function<dims_type(
+        int nrows, 
+        const cudaDeviceProp& devprop)>;
+
+using cudakernel_hll_call_wrapper_cb =
+    std::function<void(
+        const double **as,
+        const uint64_t **ja,
+        const uint64_t *maxnzs,
+        const size_t *pitches_as,
+        const size_t *pitches_ja,
+        uint64_t numblks,
+        uint32_t hs,
+        uint32_t m, 
+        const double* x, 
+        double* y,
+        const cudaEvent_t& start,
+        const cudaEvent_t& stop,
+        const dims_type& dims)>;
+
+static void 
+ensure_device_capabilities_hll(
+        const dims_type& dims, 
+        const cudaDeviceProp& device_props) {
+
+}
+
+static double
 base_kernel_hll_caller_taketime(
         const void *format, 
         const union format_args *format_args, 
@@ -302,45 +334,224 @@ base_kernel_hll_caller_taketime(
         const char* variant,
         mult_datatype multiply_datatype) {
 
+    puts("begin proc");
+
     const struct hll_format *old_hll = (const struct hll_format*) format;
+
+    checkCudaErrors(cudaDeviceReset());
+
+    int device_id;
+    checkCudaErrors(cudaGetDevice(&device_id));
+
+    cudaDeviceProp device_props;
+    checkCudaErrors(cudaGetDeviceProperties(&device_props, device_id));
 
     struct hll_format hll;
     transpose_hll(&hll, old_hll, format_args->hll.hs);
 
-    free_hll_format(&hll, format_args->hll.hs);
-}
+    double *host_x = make_vector_of_doubles(format_args->hll.n);
+    size_t *host_pitches_as = checked_malloc(size_t, hll.numblks);
+    size_t *host_pitches_ja = checked_malloc(size_t, hll.numblks);
+    double **host_dev_as = checked_malloc(double*, hll.numblks);
+    uint64_t **host_dev_ja = checked_malloc(uint64_t*, hll.numblks);
 
+    double **dev_as;
+    uint64_t **dev_ja;
+    uint64_t *dev_maxnzs;
+    size_t *dev_pitches_as;
+    size_t *dev_pitches_ja;
+    double *dev_y;
+    double *dev_x;
 
-static double 
-test(
-        const void* format,
-        const union format_args *format_args,
-        const char* e,
-        mult_datatype m,
-        const char* v) {
+    size_t x_size = sizeof(double) * format_args->hll.n;
+    size_t maxnzs_size = sizeof(uint64_t) * hll.numblks;
+    size_t y_size = sizeof(double) * format_args->hll.m;
+    size_t pitches_size = sizeof(size_t) * hll.numblks;
+    size_t as_size = sizeof(double*) * hll.numblks;
+    size_t ja_size = sizeof(uint64_t*) * hll.numblks;
 
-    const struct hll_format *old_hll = (const struct hll_format*) format;
+    checkCudaErrors(cudaMalloc(&dev_y, y_size));
+    checkCudaErrors(cudaMalloc(&dev_x, x_size));
+    checkCudaErrors(cudaMalloc(&dev_pitches_ja, pitches_size));
+    checkCudaErrors(cudaMalloc(&dev_pitches_as, pitches_size));
+    checkCudaErrors(cudaMalloc(&dev_as, as_size));
+    checkCudaErrors(cudaMalloc(&dev_ja, ja_size));
+    checkCudaErrors(cudaMalloc(&dev_maxnzs, maxnzs_size));
 
-    struct hll_format hll;
-    transpose_hll(&hll, old_hll, format_args->hll.hs);
+    for(uint64_t i = 0; i < hll.numblks; i++) {
+        checkCudaErrors(cudaMallocPitch(
+            &host_dev_as[i], &host_pitches_as[i], format_args->hll.hs, hll.blks[i].maxnz));
+        checkCudaErrors(cudaMallocPitch(
+            &host_dev_ja[i], &host_pitches_ja[i], format_args->hll.hs, hll.blks[i].maxnz));
+    }
+
+    puts("going to memcpys");
+
+    checkCudaErrors(cudaMemcpy(dev_pitches_as, host_pitches_as, pitches_size, cudaMemcpyHostToDevice));
+    checkCudaErrors(cudaMemcpy(dev_pitches_ja, host_pitches_ja, pitches_size, cudaMemcpyHostToDevice));
+
+    checkCudaErrors(cudaMemcpy(dev_as, host_dev_as, as_size, cudaMemcpyHostToDevice));
+    checkCudaErrors(cudaMemcpy(dev_ja, host_dev_ja, ja_size, cudaMemcpyHostToDevice));
+
+    checkCudaErrors(cudaMemset(dev_y, 0, y_size));
+    checkCudaErrors(cudaMemcpy(dev_x, host_x, x_size, cudaMemcpyHostToDevice));
+
+    puts("going to memcpys with pitchesss");
+
+    for(uint64_t i = 0; i < hll.numblks; i++) {
+        checkCudaErrors(cudaMemcpy(
+            &dev_maxnzs[i], &hll.blks[i].maxnz, 
+            sizeof(uint64_t), cudaMemcpyHostToDevice));
+        checkCudaErrors(cudaMemcpy2D(
+            host_dev_as[i], host_pitches_as[i], hll.blks[i].as, 
+            format_args->hll.hs * sizeof(double), format_args->hll.hs, 
+            hll.blks[i].maxnz, cudaMemcpyHostToDevice));
+        checkCudaErrors(cudaMemcpy2D(
+            host_dev_ja[i], host_pitches_ja[i], hll.blks[i].ja, 
+            format_args->hll.hs * sizeof(uint64_t), format_args->hll.hs, 
+            hll.blks[i].maxnz, cudaMemcpyHostToDevice));
+    }
+
+    free_reset_ptr(host_pitches_as);
+    free_reset_ptr(host_pitches_ja);
+    
+    free_reset_ptr(host_x);
+
+    cudaEvent_t start;
+    cudaEvent_t stop;
+
+    checkCudaErrors(cudaEventCreate(&start));
+    checkCudaErrors(cudaEventCreate(&stop));
+
+    puts("post-free kernel launch...");
+
+    cuda_kernel_launcher(
+        device_props, const_cast<const double**>(dev_as), 
+        const_cast<const uint64_t**>(dev_ja), dev_maxnzs, 
+        dev_pitches_as, dev_pitches_ja, hll.numblks, 
+        format_args->hll.hs, format_args->hll.m, 
+        dev_x, dev_y, start, stop);
+
+    puts("kernel is done, proceeding...");
+
+    float time_ms;
+    checkCudaErrors(cudaEventElapsedTime(&time_ms, start, stop));
+
+    checkCudaErrors(cudaEventDestroy(start));
+    checkCudaErrors(cudaEventDestroy(stop));
+
+    for(uint64_t i = 0; i < hll.numblks; i++) {
+        checkCudaErrors(cudaFree(host_dev_as[i]));
+    }
+    checkCudaErrors(cudaFree(dev_as));
+    free_reset_ptr(host_dev_as);
+
+    for(uint64_t i = 0; i < hll.numblks; i++) {
+        checkCudaErrors(cudaFree(host_dev_ja[i]));
+    }
+    checkCudaErrors(cudaFree(dev_ja));
+    free_reset_ptr(host_dev_ja);
 
     free_transposed_hll_format(&hll);
 
-    return 0;
+    checkCudaErrors(cudaFree(dev_maxnzs));
+    checkCudaErrors(cudaFree(dev_pitches_as));
+    checkCudaErrors(cudaFree(dev_pitches_ja));
+    checkCudaErrors(cudaFree(dev_x));
+    double *host_y = checked_calloc(double, format_args->hll.m);
+    checkCudaErrors(cudaMemcpy(host_y, dev_y, y_size, cudaMemcpyDeviceToHost));
+    checkCudaErrors(cudaFree(dev_y));
+
+    puts("lalalalal");
+
+    write_y_vector_to_csv("gpu", variant, multiply_datatype, mtxname, "hll", format_args->hll.m, host_y);
+
+    free_reset_ptr(host_y);
+
+    puts("post write yvec");
+
+    return time_ms / 1000;
+}
+
+#define CUDAKERNEL_LAUNCHER_HLL_ARGLIST \
+    const double **as, \
+    const uint64_t **ja, \
+    const uint64_t *maxnzs, \
+    const size_t *pitches_as, \
+    const size_t *pitches_ja, \
+    uint64_t numblks, \
+    uint32_t hs, \
+    uint32_t m, \
+    const double *x, \
+    double *y, \
+    const cudaEvent_t& evstart, \
+    const cudaEvent_t& evstop
+
+#define CUDAKERNEL_WRAPPER_HLL_ARGLIST \
+    CUDAKERNEL_LAUNCHER_HLL_ARGLIST, \
+    const dims_type& dims
+
+static double 
+base_kernel_hll_caller_taketime_with_launcher(
+        const void *format, 
+        const union format_args *format_args, 
+        const char* mtxname,
+        const char* variant,
+        const mult_datatype multiply_datatype,
+        const get_dims_for_hll_cb& get_dims_for_hll,
+        const cudakernel_hll_call_wrapper_cb& cudakernel) {
+
+    return base_kernel_hll_caller_taketime(
+        format, 
+        format_args, 
+        mtxname, 
+        [get_dims_for_hll, cudakernel](
+            const cudaDeviceProp& devpr,
+            CUDAKERNEL_LAUNCHER_HLL_ARGLIST){
+                
+                dims_type dims = get_dims_for_hll(numblks, devpr);
+                ensure_device_capabilities_hll(dims, devpr);
+                cudakernel(as, ja, maxnzs, pitches_as, pitches_ja, 
+                            numblks, hs, m, x, y, evstart, evstop, dims);
+                checkCudaErrors(cudaEventSynchronize(evstop));
+        },
+        variant,
+        multiply_datatype);
+}
+
+static double 
+kernel_hll_v1_caller_taketime(
+        const void* format, 
+        const union format_args *format_args, 
+        const char* mtxname,
+        mult_datatype multiply_datatype,
+        const char* variant) {
+
+    return base_kernel_hll_caller_taketime_with_launcher(
+        format, format_args, mtxname, variant, multiply_datatype,
+        get_dims_for_hll_v1,
+        [](CUDAKERNEL_WRAPPER_HLL_ARGLIST) {
+            checkCudaErrors(cudaEventRecord(evstart));
+            __kernel_hll_v1<<<
+                std::get<0>(dims), 
+                std::get<1>(dims), 
+                std::get<2>(dims)>>>
+                (as, ja, maxnzs, pitches_as,
+                pitches_ja, numblks, hs, m, x, y);
+            checkCudaErrors(cudaEventRecord(evstop));
         }
+    );
+}
+
+#undef CUDAKERNEL_LAUNCHER_HLL_ARGLIST
+#undef CUDAKERNEL_WRAPPER_HLL_ARGLIST
 
 int main(int argc, char** argv) {
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wmissing-field-initializers"
 
-    struct kernel_execution_info kexi[1] = {
-        {
-            .kernel_time_meter = test,
-            .format = HLL,
-            .multiply_datatype = FLOAT64,
-        }
-        /*
+    struct kernel_execution_info kexi[4] = {
         {
             .kernel_time_meter = kernel_csr_v1_caller_taketime,
             .format = CSR,
@@ -359,12 +570,17 @@ int main(int argc, char** argv) {
             .multiply_datatype = FLOAT64,
             .variant_name = "v3"
         },
-        */
+        {
+            .kernel_time_meter = kernel_hll_v1_caller_taketime,
+            .format = HLL,
+            .hll_hack_size = 32,
+            .multiply_datatype = FLOAT64,
+        }
     };
 
     struct executor_args eargs = {
         .kexinfos = kexi,
-        .nkexs = 1,
+        .nkexs = 4,
         .runner = GPU,
     };
 
