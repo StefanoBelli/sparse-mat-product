@@ -334,8 +334,6 @@ base_kernel_hll_caller_taketime(
         const char* variant,
         mult_datatype multiply_datatype) {
 
-    puts("begin proc");
-
     const struct hll_format *old_hll = (const struct hll_format*) format;
 
     checkCudaErrors(cudaDeviceReset());
@@ -347,7 +345,7 @@ base_kernel_hll_caller_taketime(
     checkCudaErrors(cudaGetDeviceProperties(&device_props, device_id));
 
     struct hll_format hll;
-    transpose_hll(&hll, old_hll, format_args->hll.hs);
+    contig_transposed_hll(&hll, old_hll, format_args->hll.hs);
 
     double *host_x = make_vector_of_doubles(format_args->hll.n);
     size_t *host_pitches_as = checked_malloc(size_t, hll.numblks);
@@ -380,12 +378,16 @@ base_kernel_hll_caller_taketime(
 
     for(uint64_t i = 0; i < hll.numblks; i++) {
         checkCudaErrors(cudaMallocPitch(
-            &host_dev_as[i], &host_pitches_as[i], format_args->hll.hs, hll.blks[i].maxnz));
+            &host_dev_as[i], 
+            &host_pitches_as[i], 
+            format_args->hll.hs * sizeof(double), 
+            hll.blks[i].maxnz));
         checkCudaErrors(cudaMallocPitch(
-            &host_dev_ja[i], &host_pitches_ja[i], format_args->hll.hs, hll.blks[i].maxnz));
+            &host_dev_ja[i], 
+            &host_pitches_ja[i], 
+            format_args->hll.hs * sizeof(uint64_t), 
+            hll.blks[i].maxnz));
     }
-
-    puts("going to memcpys");
 
     checkCudaErrors(cudaMemcpy(dev_pitches_as, host_pitches_as, pitches_size, cudaMemcpyHostToDevice));
     checkCudaErrors(cudaMemcpy(dev_pitches_ja, host_pitches_ja, pitches_size, cudaMemcpyHostToDevice));
@@ -396,20 +398,28 @@ base_kernel_hll_caller_taketime(
     checkCudaErrors(cudaMemset(dev_y, 0, y_size));
     checkCudaErrors(cudaMemcpy(dev_x, host_x, x_size, cudaMemcpyHostToDevice));
 
-    puts("going to memcpys with pitchesss");
-
     for(uint64_t i = 0; i < hll.numblks; i++) {
         checkCudaErrors(cudaMemcpy(
-            &dev_maxnzs[i], &hll.blks[i].maxnz, 
-            sizeof(uint64_t), cudaMemcpyHostToDevice));
+            &dev_maxnzs[i], 
+            &hll.blks[i].maxnz, 
+            sizeof(uint64_t), 
+            cudaMemcpyHostToDevice));
         checkCudaErrors(cudaMemcpy2D(
-            host_dev_as[i], host_pitches_as[i], hll.blks[i].as, 
-            format_args->hll.hs * sizeof(double), format_args->hll.hs, 
-            hll.blks[i].maxnz, cudaMemcpyHostToDevice));
+            host_dev_as[i], 
+            host_pitches_as[i], 
+            hll.blks[i].as, 
+            format_args->hll.hs * sizeof(double), 
+            format_args->hll.hs * sizeof(double), 
+            hll.blks[i].maxnz, 
+            cudaMemcpyHostToDevice));
         checkCudaErrors(cudaMemcpy2D(
-            host_dev_ja[i], host_pitches_ja[i], hll.blks[i].ja, 
-            format_args->hll.hs * sizeof(uint64_t), format_args->hll.hs, 
-            hll.blks[i].maxnz, cudaMemcpyHostToDevice));
+            host_dev_ja[i], 
+            host_pitches_ja[i], 
+            hll.blks[i].ja, 
+            format_args->hll.hs * sizeof(uint64_t), 
+            format_args->hll.hs * sizeof(uint64_t), 
+            hll.blks[i].maxnz, 
+            cudaMemcpyHostToDevice));
     }
 
     free_reset_ptr(host_pitches_as);
@@ -423,16 +433,12 @@ base_kernel_hll_caller_taketime(
     checkCudaErrors(cudaEventCreate(&start));
     checkCudaErrors(cudaEventCreate(&stop));
 
-    puts("post-free kernel launch...");
-
     cuda_kernel_launcher(
         device_props, const_cast<const double**>(dev_as), 
         const_cast<const uint64_t**>(dev_ja), dev_maxnzs, 
         dev_pitches_as, dev_pitches_ja, hll.numblks, 
         format_args->hll.hs, format_args->hll.m, 
         dev_x, dev_y, start, stop);
-
-    puts("kernel is done, proceeding...");
 
     float time_ms;
     checkCudaErrors(cudaEventElapsedTime(&time_ms, start, stop));
@@ -452,7 +458,7 @@ base_kernel_hll_caller_taketime(
     checkCudaErrors(cudaFree(dev_ja));
     free_reset_ptr(host_dev_ja);
 
-    free_transposed_hll_format(&hll);
+    free_contig_transposed_hll_format(&hll);
 
     checkCudaErrors(cudaFree(dev_maxnzs));
     checkCudaErrors(cudaFree(dev_pitches_as));
@@ -462,13 +468,9 @@ base_kernel_hll_caller_taketime(
     checkCudaErrors(cudaMemcpy(host_y, dev_y, y_size, cudaMemcpyDeviceToHost));
     checkCudaErrors(cudaFree(dev_y));
 
-    puts("lalalalal");
-
     write_y_vector_to_csv("gpu", variant, multiply_datatype, mtxname, "hll", format_args->hll.m, host_y);
 
     free_reset_ptr(host_y);
-
-    puts("post write yvec");
 
     return time_ms / 1000;
 }

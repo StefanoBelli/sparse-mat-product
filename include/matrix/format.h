@@ -26,7 +26,7 @@ struct hll_format {
 void coo_to_hll(struct hll_format* out, const struct coo_format *coo, uint64_t nz, uint64_t m, uint64_t hs);
 void free_hll_format(struct hll_format*, uint64_t hs);
 
-void transpose_hll(struct hll_format* out, const struct hll_format* in, uint64_t hs);
-void free_transposed_hll_format(struct hll_format*);
+void contig_transposed_hll(struct hll_format* out, const struct hll_format* in, uint64_t hs);
+void free_contig_transposed_hll_format(struct hll_format*);
 
 #endif

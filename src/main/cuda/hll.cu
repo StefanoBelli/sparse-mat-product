@@ -33,15 +33,13 @@ __global__ void __kernel_hll_v1(
         uint64_t m,
         const double *x,
         double *y) {
-//printf("%p, %p, %p, %p, %p\n", as, ja, maxnzs, pitches_as, pitches_ja);
-        
-        const int thread_global_index = blockDim.x * blockIdx.x + threadIdx.x;
+    
+    const int thread_global_index = blockDim.x * blockIdx.x + threadIdx.x;
 
     if(thread_global_index >= numblks) {
         return;
     }
 
-    //printf("thread %ld is alive! :)\n", thread_global_index);
     const double *my_block_as = as[thread_global_index];
     const size_t my_block_as_pitch = pitches_as[thread_global_index];
     const uint64_t *my_block_ja = ja[thread_global_index];
@@ -53,11 +51,12 @@ __global__ void __kernel_hll_v1(
 
     for(uint64_t i = 0; i < hs; i++) {
         double ell_tmp = 0;
-        /*for(uint64_t j = 0; j < my_block_maxnz; j++) {
+        for(uint64_t j = 0; j < my_block_maxnz; j++) {
             ell_tmp += 
-                *at_pitched_matrix(double, my_block_as_pitch, my_block_as, j, i) * 
+                *at_pitched_matrix(double, my_block_as_pitch, my_block_as, j, i) *
                 x[*at_pitched_matrix(uint64_t, my_block_ja_pitch, my_block_ja, j, i)];
-        }*/
+            //printf("%ld\n",*at_pitched_matrix(uint64_t, my_block_ja_pitch, my_block_ja, j, i));
+        }
         t[i] = ell_tmp;
     }
 
@@ -66,9 +65,7 @@ __global__ void __kernel_hll_v1(
         endrow = m - thread_global_index * hs;
     }
 
-    /*
     for(uint64_t i = 0; i < endrow; i++) {
         y[i + thread_global_index * hs] = t[i];
     }
-    */
 }
