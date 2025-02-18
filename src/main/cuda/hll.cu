@@ -1,6 +1,6 @@
 #include <main/cuda/hll.h>
 
-#define at_pitched_matrix(ty, pitch, base, i, j)  ((ty*)((char*)base + i * pitch) + j)
+#define at_pitched_matrix(ty, pitch, base, i, j)  ((ty*)((char*)base + (i * pitch)) + j)
 
 dims_type get_dims_for_hll_v1(int numblocks, const cudaDeviceProp& device_props) {
 
@@ -20,8 +20,7 @@ dims_type get_dims_for_hll_v1(int numblocks, const cudaDeviceProp& device_props)
     return std::make_tuple<>(grid_dim, block_dim, 0);
 }
 
-#include <stdio.h>
-
+// hs must be 32
 __global__ void __kernel_hll_v1(
         const double **as,
         const uint64_t **ja,
@@ -46,18 +45,17 @@ __global__ void __kernel_hll_v1(
     const size_t my_block_ja_pitch = pitches_ja[thread_global_index];
     const uint64_t my_block_maxnz = maxnzs[thread_global_index];
 
-    // TODO change here 
     double t[32];
 
-    for(uint64_t i = 0; i < hs; i++) {
+    for(uint64_t r = 0; r < hs; r++) {
         double ell_tmp = 0;
-        for(uint64_t j = 0; j < my_block_maxnz; j++) {
+        for(uint64_t c = 0; c < my_block_maxnz; c++) {
             ell_tmp += 
-                *at_pitched_matrix(double, my_block_as_pitch, my_block_as, j, i) *
-                x[*at_pitched_matrix(uint64_t, my_block_ja_pitch, my_block_ja, j, i)];
-            //printf("%ld\n",*at_pitched_matrix(uint64_t, my_block_ja_pitch, my_block_ja, j, i));
+                *at_pitched_matrix(double, my_block_as_pitch, my_block_as, c, r) *
+                x[*at_pitched_matrix(uint64_t, my_block_ja_pitch, my_block_ja, c, r)];
         }
-        t[i] = ell_tmp;
+
+        t[r] = ell_tmp;
     }
 
     uint64_t endrow = hs;
