@@ -16,7 +16,7 @@ void __kernel_hll(
         for(uint64_t i = 0; i < hs; i++) {
             double ell_tmp = 0;
             for(uint64_t j = 0; j < ell.maxnz; j++) {
-                ell_tmp += ell.as[i][j] * x[ell.ja[i][j]];
+                ell_tmp += ell.as[(i * ell.maxnz) + j] * x[ell.ja[(i * ell.maxnz) + j]];
             }
             t[i] = ell_tmp;
         }

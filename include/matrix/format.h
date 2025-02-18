@@ -13,8 +13,8 @@ void coo_to_csr(struct csr_format* out, const struct coo_format *coo, uint64_t n
 void free_csr_format(struct csr_format*);
 
 struct ellpack_format {
-    uint64_t **ja;
-    double **as;
+    uint64_t *ja;
+    double *as;
     uint64_t maxnz;
 };
 
@@ -24,9 +24,8 @@ struct hll_format {
 };
 
 void coo_to_hll(struct hll_format* out, const struct coo_format *coo, uint64_t nz, uint64_t m, uint64_t hs);
-void free_hll_format(struct hll_format*, uint64_t hs);
+void free_hll_format(struct hll_format*);
 
-void contig_transposed_hll(struct hll_format* out, const struct hll_format* in, uint64_t hs);
-void free_contig_transposed_hll_format(struct hll_format*);
+void transpose_hll(struct hll_format* out, const struct hll_format* in, uint64_t hs);
 
 #endif

@@ -48,14 +48,6 @@ void free_csr_format(struct csr_format* cr) {
     max_elem; \
 })
 
-#define checked_matrix_calloc(ty, m, n) ({ \
-    ty** mtx = checked_calloc(ty*, m); \
-    for(uint64_t i = 0; i < m; i++) { \
-        mtx[i] = checked_calloc(ty, n); \
-    } \
-    mtx; \
-})
-
 static void 
 coo_to_ellpack(
         struct ellpack_format *out, 
@@ -74,15 +66,15 @@ coo_to_ellpack(
 
     free_reset_ptr(nzrs);
 
-    out->ja = checked_matrix_calloc(uint64_t, m, out->maxnz);
-    out->as = checked_matrix_calloc(double, m, out->maxnz);
+    out->ja = checked_calloc(uint64_t, m * out->maxnz);
+    out->as = checked_calloc(double, m * out->maxnz);
 
     uint64_t *cols = checked_calloc(uint64_t, m);
 
     for(uint64_t i = 0; i < nz; i++) {
         uint64_t eff_i = coo[i + s_idx_incl].i - s_row;
-        out->as[eff_i][cols[eff_i]] = coo[i + s_idx_incl].v;
-        out->ja[eff_i][cols[eff_i]] = coo[i + s_idx_incl].j;
+        out->as[(eff_i * out->maxnz) + cols[eff_i]] = coo[i + s_idx_incl].v;
+        out->ja[(eff_i * out->maxnz) + cols[eff_i]] = coo[i + s_idx_incl].j;
         cols[eff_i]++;
     }
 
@@ -91,24 +83,18 @@ coo_to_ellpack(
     for(uint64_t i = 0; i < m; i++) {
         uint64_t last_valid_index = 0;
         for(uint64_t j = 0; j < out->maxnz; j++) {
-            if(out->as[i][j] != 0) {
-                last_valid_index = out->ja[i][j];
+            if(out->as[(i * out->maxnz) + j] != 0) {
+                last_valid_index = out->ja[(i * out->maxnz) + j];
             } else {
-                out->ja[i][j] = last_valid_index;
+                out->ja[(i * out->maxnz) + j] = last_valid_index;
             }
         }
     }
 }
 
-#undef checked_matrix_calloc
 #undef my_max
 
-static void free_ellpack_format(struct ellpack_format *er, uint64_t m) {
-    for(uint64_t i = 0; i < m; i++) {
-        free_reset_ptr(er->ja[i]);
-        free_reset_ptr(er->as[i]);
-    }
-
+static void free_ellpack_format(struct ellpack_format *er) {
     free_reset_ptr(er->ja);
     free_reset_ptr(er->as);
     er->maxnz = 0;
@@ -155,48 +141,36 @@ coo_to_hll(
 #undef u64cast
 #undef dcast
 
-void free_hll_format(struct hll_format* hr, uint64_t hs) {
+void free_hll_format(struct hll_format* hr) {
     for(uint64_t i = 0; i < hr->numblks; i++) {
-        free_ellpack_format(&hr->blks[i], hs);
+        free_ellpack_format(&hr->blks[i]);
     }
 
     free_reset_ptr(hr->blks);
     hr->numblks = 0;
 }
 
-#define __contig_mtxcpy_from_noncontig(ty, dst_mtxptr, src_mtxptr, src_m, src_n) \
+#define __mtxcpy(dst_mtxptr, src_mtxptr, src_m, src_n) \
     do { \
         for(uint64_t r = 0; r < src_m; r++) { \
             for(uint64_t c = 0; c < src_n; c++) { \
-                ((ty*)dst_mtxptr)[c * src_m + r] = src_mtxptr[r][c]; \
+                dst_mtxptr[c * src_m + r] = src_mtxptr[r * src_n + c]; \
             } \
         } \
     } while(0)
 
-void contig_transposed_hll(struct hll_format* out, const struct hll_format* in, uint64_t hs) {
+void transpose_hll(struct hll_format* out, const struct hll_format* in, uint64_t hs) {
     out->numblks = in->numblks;
     out->blks = checked_malloc(struct ellpack_format, in->numblks);
     for(uint64_t mr = 0; mr < in->numblks; mr++) {
         out->blks[mr].maxnz = in->blks[mr].maxnz;
 
-        out->blks[mr].as = (double**) checked_calloc(double, in->blks[mr].maxnz * hs);
-        __contig_mtxcpy_from_noncontig(double, out->blks[mr].as, 
-                                        in->blks[mr].as, hs, in->blks[mr].maxnz);
+        out->blks[mr].as = checked_calloc(double, in->blks[mr].maxnz * hs);
+        __mtxcpy(out->blks[mr].as, in->blks[mr].as, hs, in->blks[mr].maxnz);
 
-        out->blks[mr].ja = (uint64_t**) checked_calloc(uint64_t, in->blks[mr].maxnz * hs);
-        __contig_mtxcpy_from_noncontig(uint64_t, out->blks[mr].ja, 
-                                        in->blks[mr].ja, hs, in->blks[mr].maxnz);
+        out->blks[mr].ja = checked_calloc(uint64_t, in->blks[mr].maxnz * hs);
+        __mtxcpy(out->blks[mr].ja, in->blks[mr].ja, hs, in->blks[mr].maxnz);
     }
 }
 
-#undef __contig_mtxcpy_from_noncontig
-
-void free_contig_transposed_hll_format(struct hll_format* hr) {
-    for(uint64_t i = 0; i < hr->numblks; i++) {
-        free_reset_ptr(hr->blks[i].as);
-        free_reset_ptr(hr->blks[i].ja);
-    }
-
-    free_reset_ptr(hr->blks);
-    hr->numblks = 0;
-}
+#undef __mtxcpy

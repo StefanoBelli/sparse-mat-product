@@ -73,13 +73,12 @@ set_num_threads_before_kernel_tm_execution(
 static void 
 free_format_mtx(
         const struct kernel_execution_info *kexinfo, 
-        void *formatted_mtx, 
-        const union format_args *fargs) {
+        void *formatted_mtx) {
 
     if (kexinfo->format == CSR) {
         free_csr_format((struct csr_format *)formatted_mtx);
     } else {
-        free_hll_format((struct hll_format *)formatted_mtx, fargs->hll.hs);
+        free_hll_format((struct hll_format *)formatted_mtx);
     }
 
     free_reset_ptr(formatted_mtx);
@@ -241,7 +240,7 @@ void run_executor(int argc, char **argv, const struct executor_args *exe_args) {
                 }
 
                 free_reset_ptr(times);
-                free_format_mtx(&exe_args->kexinfos[k], fmt_mtx, &args);
+                free_format_mtx(&exe_args->kexinfos[k], fmt_mtx);
             }
 
             fclose(mtxresfp);

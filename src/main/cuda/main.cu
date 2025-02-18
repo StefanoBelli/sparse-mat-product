@@ -345,7 +345,7 @@ base_kernel_hll_caller_taketime(
     checkCudaErrors(cudaGetDeviceProperties(&device_props, device_id));
 
     struct hll_format hll;
-    contig_transposed_hll(&hll, old_hll, format_args->hll.hs);
+    transpose_hll(&hll, old_hll, format_args->hll.hs);
 
     double *host_x = make_vector_of_doubles(format_args->hll.n);
     size_t *host_pitches_as = checked_malloc(size_t, hll.numblks);
@@ -458,7 +458,7 @@ base_kernel_hll_caller_taketime(
     checkCudaErrors(cudaFree(dev_ja));
     free_reset_ptr(host_dev_ja);
 
-    free_contig_transposed_hll_format(&hll);
+    free_hll_format(&hll);
 
     checkCudaErrors(cudaFree(dev_maxnzs));
     checkCudaErrors(cudaFree(dev_pitches_as));
