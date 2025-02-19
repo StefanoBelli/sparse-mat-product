@@ -323,6 +323,7 @@ ensure_device_capabilities_hll(
         const dims_type& dims, 
         const cudaDeviceProp& device_props) {
 
+    ensure_device_capabilities_csr(dims, device_props);
 }
 
 static double
@@ -537,6 +538,30 @@ kernel_hll_v1_caller_taketime(
     );
 }
 
+static double 
+kernel_hll_v2_caller_taketime(
+        const void* format, 
+        const union format_args *format_args, 
+        const char* mtxname,
+        mult_datatype multiply_datatype,
+        const char* variant) {
+
+    return base_kernel_hll_caller_taketime_with_launcher(
+        format, format_args, mtxname, variant, multiply_datatype,
+        get_dims_for_hll_v2,
+        [](CUDAKERNEL_WRAPPER_HLL_ARGLIST) {
+            checkCudaErrors(cudaEventRecord(evstart));
+            __kernel_hll_v2<<<
+                std::get<0>(dims), 
+                std::get<1>(dims), 
+                std::get<2>(dims)>>>
+                (as, ja, maxnzs, pitches_as,
+                pitches_ja, numblks, hs, m, x, y);
+            checkCudaErrors(cudaEventRecord(evstop));
+        }
+    );
+}
+
 #undef CUDAKERNEL_LAUNCHER_HLL_ARGLIST
 #undef CUDAKERNEL_WRAPPER_HLL_ARGLIST
 
@@ -545,7 +570,7 @@ int main(int argc, char** argv) {
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wmissing-field-initializers"
 
-    struct kernel_execution_info kexi[4] = {
+    struct kernel_execution_info kexi[5] = {
         {
             .kernel_time_meter = kernel_csr_v1_caller_taketime,
             .format = CSR,
@@ -569,12 +594,20 @@ int main(int argc, char** argv) {
             .format = HLL,
             .hll_hack_size = 32,
             .multiply_datatype = FLOAT64,
-        }
+            .variant_name = "v1"
+        },
+        {
+            .kernel_time_meter = kernel_hll_v2_caller_taketime,
+            .format = HLL,
+            .hll_hack_size = 32,
+            .multiply_datatype = FLOAT64,
+            .variant_name = "v2"
+        },
     };
 
     struct executor_args eargs = {
         .kexinfos = kexi,
-        .nkexs = 4,
+        .nkexs = 5,
         .runner = GPU,
     };
 

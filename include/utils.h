@@ -88,4 +88,6 @@ void write_y_vector_to_csv(
     uint64_t m, 
     double* y);
 
+int ceiling_div(int m, int n);
+
 #endif

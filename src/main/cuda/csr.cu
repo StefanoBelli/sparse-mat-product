@@ -1,5 +1,9 @@
 #include <main/cuda/csr.h>
 
+extern "C" {
+#include <utils.h>
+}
+
 dims_type get_dims_for_csr_v1(
         int nrows, 
         const cudaDeviceProp& device_props) {
@@ -12,9 +16,7 @@ dims_type get_dims_for_csr_v1(
         return std::make_tuple<>(grid_dim, block_dim, 0);
     }
 
-    double splsz = nrows / max_thr_per_blk;
-    int xgridsz = nrows % max_thr_per_blk ? std::ceil(splsz) + 1 : splsz;
-
+    int xgridsz = ceiling_div(nrows, max_thr_per_blk);
     dim3 grid_dim(xgridsz, 1);
     dim3 block_dim(max_thr_per_blk, 1);
     return std::make_tuple<>(grid_dim, block_dim, 0);
@@ -55,9 +57,7 @@ dims_type get_dims_for_csr_v2(
         return std::make_tuple<>(grid_dim, block_dim, 0);
     }
 
-    double splsz = nrows * warp_size / max_thr_per_blk;
-    int xgridsz = (nrows * warp_size) % max_thr_per_blk ? std::ceil(splsz) + 1 : splsz;
-
+    int xgridsz = ceiling_div(nrows * warp_size, max_thr_per_blk);
     dim3 grid_dim(xgridsz, 1);
     dim3 block_dim(max_thr_per_blk, 1);
     return std::make_tuple<>(grid_dim, block_dim, 0);

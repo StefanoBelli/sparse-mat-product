@@ -85,3 +85,7 @@ void write_y_vector_to_csv(
         current_mdt = mdt;
     }
 }
+
+int ceiling_div(int m, int n) {
+    return (m + n - 1) / n;
+}
