@@ -130,8 +130,6 @@ __global__ void __kernel_csr_v3(
         }
     }
 
-    __syncthreads();
-
     if(thread_idx_in_warp == 0) {
         const int warp_local_index = threadIdx.x / warpSize;
         for(int i = 0; i < warpSize; i++) {

@@ -127,8 +127,6 @@ __global__ void __kernel_hll_v2(
 
     t_shmem[(warp_local_index * warpSize) + thread_idx_in_warp] = ell_tmp;
 
-    __syncthreads();
-
     if (thread_idx_in_warp == 0) {
         uint64_t endrow = hs;
         if (warp_global_index * hs + hs > m) {
