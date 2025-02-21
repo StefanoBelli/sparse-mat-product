@@ -26,6 +26,11 @@ with open(f"{measurements_path}/results/nonzeroes.csv", "r") as nzscsv:
     for row in nzs:
         mtxs_with_nonzeroes[row[0]] = int(row[1])
 
+mtxnzs_latex = []
+
+for mtx in mtxs_with_nonzeroes:
+    mtxnzs_latex.append(f"\t\t\t\\textbf{{{mtx.replace('_','\\_')}}} & {mtxs_with_nonzeroes[mtx]} \\\\")
+
 for mtx_name in mtxs_with_nonzeroes:
     fname_serial = f"{measurements_path}/results/{mtx_name}_serial.csv"
     fname_cpu_mt = f"{measurements_path}/results/{mtx_name}_cpu_mt.csv"
@@ -89,7 +94,7 @@ for k in diz.keys():
         var_t = var(gpu_data_aggregate[gpu])
         gflops = (2 * mtxs_with_nonzeroes[mtxname] / avg_t) / 1e9
         if f"{gpu}_gpu".endswith(k):
-            diz[k][2].append(f"\t\\textbf{{{mtxname.replace('_','\\_')}}} & {min_t * 1000:.3f} & {max_t * 1000:.3f} & {avg_t * 1000:.3f} & {var_t:.7f} & {gflops:.2f} \\\\")
+            diz[k][2].append(f"\t\t\t\\textbf{{{mtxname.replace('_','\\_')}}} & {min_t * 1000:.3f} & {max_t * 1000:.3f} & {avg_t * 1000:.3f} & {var_t:.5f} & {gflops:.4f} \\\\")
 
     for ser in ser_data_aggregate:
         mtxname = ser[:find_underscore_from_end(ser, 2)]
@@ -99,7 +104,7 @@ for k in diz.keys():
         var_t = var(ser_data_aggregate[ser])
         gflops = (2 * mtxs_with_nonzeroes[mtxname] / avg_t) / 1e9
         if f"{ser}_ser".endswith(k):
-            diz[k][2].append(f"\t\\textbf{{{mtxname.replace('_','\\_')}}} & {min_t * 1000:.3f} & {max_t * 1000:.3f} & {avg_t * 1000:.3f} & {var_t:.7f} & {gflops:.2f} \\\\")
+            diz[k][2].append(f"\t\t\t\\textbf{{{mtxname.replace('_','\\_')}}} & {min_t * 1000:.3f} & {max_t * 1000:.3f} & {avg_t * 1000:.3f} & {var_t:.5f} & {gflops:.4f} \\\\")
     
     for mt in mt_data_aggregate:
         mtxname = mt[:find_underscore_from_end(mt, 3)]
@@ -109,24 +114,40 @@ for k in diz.keys():
         var_t = var(mt_data_aggregate[mt])
         gflops = (2 * mtxs_with_nonzeroes[mtxname] / avg_t) / 1e9
         if f"{mt}_mt".endswith(k):
-            diz[k][2].append(f"\t\\textbf{{{mtxname.replace('_','\\_')}}} & {min_t * 1000:.3f} & {max_t * 1000:.3f} & {avg_t * 1000:.3f} & {var_t:.7f} & {gflops:.2f} \\\\")
+            diz[k][2].append(f"\t\t\t\\textbf{{{mtxname.replace('_','\\_')}}} & {min_t * 1000:.3f} & {max_t * 1000:.3f} & {avg_t * 1000:.3f} & {var_t:.5f} & {gflops:.4f} \\\\")
+
+print(f"""\t\\subsection{{Nonzeri delle matrici}}
+\t\t\\begin{{table}}[H]
+\t\t\\centering
+\t\t\\begin{{tabular}}{{| l | c |}}
+\t\t\t\\hline
+\t\t\t\\textbf{{Matrix}} & \\textbf{{Num. di nonzero}} \\\\
+\t\t\t\\hline
+\t\t\t\\hline
+{'\n'.join(mtxnzs_latex)}
+\t\t\t\\hline
+\t\t\\end{{tabular}}
+\t\t\\caption{{Numero di nonzeroes per le matrici}}
+\t\t\\label{{table:mtxnzs}}
+\t\\end{{table}}
+\t\\pagebreak
+""")
 
 for k in diz.keys():
-    template = f"""
-    \\subsection{{{diz[k][0]}}}
-    \\begin{{table}}[H]
-    \\centering
-	\\begin{{tabular}}{{|l |c c c c c|}}
-	\\hline
-	\\textbf{{Matrix}} & \\textbf{{Min($T$)$[ms]$}} & \\textbf{{Max($T$)$[ms]$}} & \\textbf{{Avg($T$)$[ms]$}} & \\textbf{{Var($T$)}} & \\textbf{{GFLOPS}} \\\\
-	\\hline
-	\\hline
+    print(f"""\t\\subsection{{{diz[k][0]}}}
+\t\\begin{{table}}[H]
+\t\t\\centering
+\t\t\\begin{{tabular}}{{| l | c c c c | c |}}
+\t\t\t\\hline
+\t\t\t\\textbf{{Matrix}} & \\textbf{{Min($T$)$[ms]$}} & \\textbf{{Max($T$)$[ms]$}} & 
+\t\t\t\\textbf{{Avg($T$)$[ms]$}} & \\textbf{{Var($T$)}} & \\textbf{{GFLOPS}} \\\\ %%% header %%%
+\t\t\t\\hline
+\t\t\t\\hline
 {'\n'.join(diz[k][2])}
-    \t\\hline
-    \t\\end{{tabular}}
-    \t\\caption{{{diz[k][1]}}}
-    \t\\label{{table:{k}}}
-    \\end{{table}}
-    \\pagebreak"""
-
-    print(template)
+\t\t\t\\hline
+\t\t\\end{{tabular}}
+\t\t\\caption{{{diz[k][1]}}}
+\t\t\\label{{table:{k}}}
+\t\\end{{table}}
+\t\\pagebreak
+""")
