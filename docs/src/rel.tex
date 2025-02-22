@@ -1,8 +1,41 @@
-\documentclass[10pt]{article}
+\documentclass[9pt]{extarticle}
 \usepackage[utf8]{inputenc}
 \usepackage[italian]{babel}
 \usepackage{float}
-\usepackage{hyperref}	
+\usepackage{hyperref}
+\usepackage{amsmath}
+\usepackage{listings}
+\usepackage{xcolor}
+
+\definecolor{codegreen}{rgb}{0,0.6,0}
+\definecolor{codegray}{rgb}{0.5,0.5,0.5}
+\definecolor{codepurple}{rgb}{0.58,0,0.82}
+\definecolor{backcolour}{rgb}{1,1,1}
+
+\lstdefinestyle{mystyle}{
+    backgroundcolor=\color{backcolour},   
+    commentstyle=\color{codegreen},
+    keywordstyle=\color{magenta},
+    numberstyle=\tiny\color{codegray},
+    stringstyle=\color{codepurple},
+    breakatwhitespace=false,         
+    breaklines=true,                 
+    captionpos=b,                    
+    keepspaces=true,                 
+    numbers=left,                    
+    numbersep=5pt,                  
+    showspaces=false,                
+    showstringspaces=false,
+    showtabs=false,                  
+    tabsize=2,
+    numbers=none,
+    basicstyle=\ttfamily\small,
+    aboveskip=0pt, % Spazio sopra il codice
+    belowskip=0pt, % Spazio sotto il codice
+    lineskip=0pt  % Riduzione spaziatura tra le righe
+}
+
+\lstset{style=mystyle}
 
 \title{Prodotto matrice sparsa-vettore parallelo}
 \author{Belli Stefano}
@@ -26,6 +59,517 @@ eventuali problematiche riscontrate, prestazioni ottenute e un'analisi di queste
 \newpage
 
 \pagestyle{plain}
+
+\section{Introduzione al problema}
+Il problema affrontato è quello di moltiplicazione matrice-vettore
+\begin{equation*}
+y = Ax
+\end{equation*}
+dove la matrice $A$ è sparsa: significa che la maggior parte dei suoi $A(i,j) = 0$: memorizzarla
+interamente in memoria sarebbe uno spreco in termini di spazio,
+oltre al fatto che se la matrice è molto grande può
+essere impossibile istanziarla in memoria (e.g. 
+la specifica implementazione di \texttt{malloc()} può fallire nel gestire i blocchi enormi
+e/o richiedere altra memoria al sistema operativo con le syscall
+\texttt{brk()}, \texttt{sbrk()} o \texttt{mmap()} ad esempio).
+
+Dato che molti problemi in ambito scientifico sono caratterizzati da matrici sparse ha senso inventare
+dei formati di rappresentazione che "comprimano" la matrice, senza perdere informazioni in merito alla
+localizzazione dei componenti nella matrice "vera e propria".
+
+Rappresentando le matrici in formati diversi, anche il prodotto con un vettore sarà implementato in modo
+diverso, a seconda del formato e dell'architettura su cui viene eseguito può essere più o meno efficiente.
+
+Si vuole quindi provare a migliorare le prestazioni rispetto a un'implementazione seriale del prodotto di
+una matrice $A$ memorizzata come CSR e HLL per un vettore $x$ tramite OpenMP e CUDA: sfruttando quindi le
+possibilità di parallelizzazione delle architetture moderne.
+
+Per entrambi i formati di memorizzazione, sfruttiamo sia la CPU per eseguire il nucleo di calcolo, che la GPU,
+effettuando quindi l'offloading dell'esecuzione del kernel.
+
+\section{Formati di rappresentazione delle matrici sparse}
+Esistono moltissimi formati di rappresentazione per le matrici sparse, quelli di nostro interesse sono COO, CSR, ELL e HLL, ne segue una breve descrizione:
+
+\subsection{Il formato COO}
+Il formato "COO" è il più semplice per rappresentare una matrice sparsa, si basa sulla memorizzazione
+di 3 vettori: $I$, $J$, $V$ che hanno lunghezza uguale (pari al numero di nonzeri della matrice sparsa) 
+e in corrispondenza della posizione $i$-esima 
+per ciascun vettore ci si trovano le coordinate $(I(i), J(i))$ dell'elemento $i$-esimo nonzero della matrice,
+il cui valore è $V(i) \neq 0$ .
+
+Il prodotto matrice-vettore come definito nell'introduzione al problema viene calcolato col seguente algoritmo:
+
+\begin{minipage}{\linewidth}
+\centering
+\begin{lstlisting}[language=C]
+for(int e = 0; e < nz; e++) {
+	int ir = I[e];
+	int jc = J[e];
+	y[ir] += V[e] * x[jc];
+}
+\end{lstlisting}
+\end{minipage}
+
+\subsection{Il formato CSR}
+Il formato "CSR" occupa meno memoria rispetto a COO (ma anche e sopratutto rispetto a ELLPACK), comprimendo
+ulteriormente il vettore $I$ (che chiamiamo $IRP$): questo contiene dei "puntatori" (indici) al vettore $J$ (che chiamiamo $JA$) che rappresentano l'inizio di ciascuna riga in $JA$. Il vettore $V$ è $AS$. La riga corrrispondente nella matrice 
+sparsa originale è identificata dall'indice $i$ con la quale si accede a $IRP$ e le colonne della riga $i$ corrispondenti
+a elementi nonzero sono quelle alla quale punta il range $IRP(i) \dots IRP(i + 1)$ nel vettore $JA$.
+
+Il prodotto matrice-vettore:
+
+\begin{minipage}{\linewidth}
+\centering
+\begin{lstlisting}[language=C]
+for(uint64_t i = 0; i < m; i++) {
+    double t = 0;
+    for(uint64_t j = irp[i]; j < irp[i + 1]; j++) {
+        t += as[j] * x[ja[j]];
+    }
+    y[i] = t;
+}
+\end{lstlisting}
+\end{minipage}
+
+\subsection{Il formato ELLPACK}
+Il formato "ELL" occupa più memoria rispetto ai primi due ed è realizzato mediante l'utilizzo di 2 matrici: 
+$AS$ e $JA$. La prima contiene i valori della matrice originale (coefficienti), la seconda contiene, in corrispondenza
+del valore in $AS(i,j)$, la colonna nella matrice originale. La riga nella matrice originale corrisponde al numero di riga 
+in $AS$ e $JA$: essendo la compressione per colonne, il numero di righe rimane uguale all'originale sia per $AS$ che per 
+$JA$ e il numero di colonne è pari al $max$ di nonzeri su tutte le righe ($maxnz$) della matrice originale. 
+E' possibile che vi siano molti zero di padding.
+
+Il prodotto matrice-vettore:
+
+\begin{minipage}{\linewidth}
+\centering
+\begin{lstlisting}[language=C]
+for(uint64_t i = 0; i < m; i++) {
+    double t = 0;
+    for(uint64_t j = 0; j < maxnz; j++) {
+        t += as[(i * maxnz) + j] * x[ja[(i * maxnz) + j]];
+    }
+    y[i] = t;
+}
+\end{lstlisting}
+\end{minipage}
+
+\subsection{Il formato HLL}
+Il formato "HLL" è una variante di ELL e consente di ridurre il problema del zero padding, suddividendo la matrice 
+originale
+in sottomatric8 di $hs$ (\textit{"hack size"}) righe (di dimensione fissa: per esempio 32) e applicando ELLPACK su 
+ciascuna sottomatrice (blocchi ELL). Dovendo applicare ELL su sottomatrici diverse e avendo a che fare con matrici sparse, molte di 
+queste sottomatrici di $hs$ righe (molto minore rispetto al numero di righe della matrice sparsa originale)
+saranno rappresentate con un "basso livello" di zero padding (e quindi memoria/numero di iterazioni dell'inner loop di HLL 
+più basso), perchè per il particolare blocco ELL $maxnz$ sarà basso (per la maggior parte dei blocchi), rispetto alla stessa variabile per la matrice 
+sparsa originale. L'ultimo blocco ELL da $hs$ righe può essere molto zero-padded se il numero di righe della matrice
+sparsa non è divisibile per $hs$.
+
+Il prodotto matrice-vettore:
+
+\begin{minipage}{\linewidth}
+\centering
+\begin{lstlisting}[language=C]
+double t[hs];
+
+for(uint64_t numblk = 0; numblk < numblks; numblk++) {
+    struct ellpack_format ell = blks[numblk];
+    
+    do_ellpack_spmv(t, hs, &ell, x);
+
+    uint64_t endrow = hs;
+    if (numblk * hs + hs > m) {
+        endrow = m - numblk * hs;
+    }
+
+    for(uint64_t i = 0; i < endrow; i++) {
+        y[i + numblk * hs] = t[i];
+    }
+}
+\end{lstlisting}
+\end{minipage}
+
+I problemi che hanno in comune tutte queste implementazioni di prodotto spmv:
+
+\begin{itemize}
+	\item il kernel non è più compute-bound ma memory-bound: il numero di accessi in memoria è notevolmente più alto 
+	rispetto a un classico prodotto matrice-vettore - per realizzare il nucleo di calcolo sono necessari più
+	accessi in memoria che operazioni FP - i FLOPs sono notevolmente ridotti. 
+
+	\item La cache non viene sfruttata bene in quanto si hanno evidenti problemi per quanto riguarda la località spaziale dei 
+	dati (es. in tutti i casi il vettore $x$ viene acceduto sequenzialmente con indici di colonna che 
+	provocano accessi che saltano da una parte all'altra di $x$)
+\end{itemize}
+
+\section{Dal download delle matrici all'esecuzione dei kernel}
+
+Prima di iniziare ad eseguire i nuclei di calcolo, sono state realizzate delle funzioni per scaricare e convertire le
+matrici in CSR/HLL.
+
+Le matrici vengono scaricate dal sito \url{https://sparse.tamu.edu/} automaticamente dall'applicativo, 
+vengono sfruttate le funzioni di lettura del
+formato MatrixMarket da \url{https://math.nist.gov/MatrixMarket/mmio-c.html}. Sono di interesse le matrici che siano
+reali o pattern e simmetriche o generali. Nel caso in cui le matrici siano simmetriche va ricostruito il triangolo
+superiore o inferiore: per capire quale sia il triangolo memorizzato (e quindi quello da ricostruire) è sufficiente
+confrontare gli indici memorizzati: se $i\le j\;\;\forall i=1,\dots,m\,,j=1,\dots,n$ allora il triangolo memorizzato è 
+quello superiore, altrimenti è quello inferiore. Per alcune matrici, nel formato MatrixMarket viene memorizzato
+espliticamente il valore 0, sono stati scartati nella memorizzazione finale COO, e opportunamente non considerati
+nel calcolo dei nonzero finali.
+
+Da COO sono stati implementati i convertitori in CSR e HLL. Per ridurre notevolmente i tempi di conversione è stato
+necessario ordinare gli elementi del formato COO in base alle righe grazie alla funzione di libreria C \texttt{qsort()}.
+
+Il nuclei di calcolo vengono eseguiti da un "executor" che mette insieme il tutto: legge le matrici in formato
+MatrixMarket, le converte in COO, poi nel formato desiderato dal kernel (informazioni passate tramite una struct per ogni 
+kernel da eseguire), quest'ultimo viene chiamato e quindi salvato il tempo di esecuzione in file CSV (in realtà viene
+chiamata la funzione che imposta i parametri e chiama poi il kernel prendendo opportunamente i tempi con un 
+timer ad alta risoluzione).
+
+L'implementazione seriale è stata realizzata sia per CSR che HLL.
+
+\textit{Il codice è localizzato in \texttt{src/main/serial} e nei file \texttt{csr.c} e \texttt{hll.c} è presente il 
+codice del nucleo di calcolo, mentre in \texttt{main.c} è presente il codice che effettua la chiamata ai kernel.}
+
+I timer che sono stati utilizzati per prendere il tempo necessario al calcolo del prodotto spmv:
+\begin{itemize}
+	\item \texttt{clock\_gettime(CLOCK\_MONOTONIC, ...)} per le varianti seriali e OpenMP
+	\item \texttt{cudaEventElapsedTime(...)} per la variante CUDA (eventi)
+\end{itemize}
+
+I kernel vengono chiamati 50 volte sia per l'implementazione seriale, openmp e CUDA.
+
+\section{Parallelizzazione con OpenMP}
+\textit{Il codice è localizzato in \texttt{src/main/openmp} e nei file \texttt{csr.c} e \texttt{hll.c} è presente il 
+codice del nucleo di calcolo, mentre in \texttt{main.c} è presente il codice che effettua la chiamata ai kernel.}
+
+Grazie alle facilitazioni offerte dai compilatori che implementano OpenMP, è stato sufficiente riutilizzare l'
+implementazione seriale e usare prima del for loop la direttiva \texttt{\#pragma omp parallel for} per ottenere
+una versione parallelizzata con OpenMP.
+
+Sia per CSR che HLL, è risultato essere una buona soluzione applicare la direttiva omp nel loop più esterno: 
+ogni thread deve farsi carico di una certa quantità significativa di lavoro.
+
+Nel caso di HLL, è stato usato \texttt{schedule(dynamic)} ed il parametro hacksize pari a 1024 per permettere a ciascun
+thread di effettuare calcoli su una matrice più grande rispetto a una con 32 righe. 
+
+Data la variabilità del $maxnz$ per
+ciascun blocco ELL vale la pena aggiungere un leggero overhead dovuto alla runtime di OpenMP usando la sched dinamica,
+quindi per permettere a ciascun thread di non rimanere senza lavoro da fare nel caso in cui le iterazioni assegnatogli
+siano di blocchi ELL con pochi nonzero (terminando subito il lavoro, mentre con la sched dinamica permettiamo al thread di
+prelevare dal pool di iterazioni del lavoro da fare, senza rispettare una preassegnazione statica).
+
+Nel caso di CSR è stato utilizzato \texttt{schedule(static)} assumendo quindi più uniformità del carico di lavoro
+e risparmiando sull'overhead della runtime omp.
+
+In entrambi i casi, viene lasciato a OpenMP il compito di organizzare la suddivisione delle iterazioni tra i thread.
+
+Nel caso CSR, ciascuna iterazione corrisponde a una riga della matrice: al thread verranno assegnate un certo
+numero di righe da moltiplicare per il vettore $x$.
+
+Per HLL, ogni iterazione è un blocco ELL da 1024 righe da moltiplicare per $x$.
+
+Tramite una chiamata a \texttt{omp\_set\_num\_threads()} viene impostato il numero di thread che deve essere utilizzato
+per la parallelizzazione, e va da 1 fino al numero di core online nel sistema.
+
+Sono stati effettuati, ma senza riscontri positivi (e quindi non inclusi nel progetto) tentativi di loop unrolling,
+forzando GCC a effettuarlo anche su loop più interni ma il risultato è stato l'opposto di quanto sperato - probabilmente
+il compilatore esaurisce i registri a sua disposizione e deve fare affidamento alla memoria (register spilling).
+
+E' stata anche effettuata una prova di allineamento degli elementi vettore $y$ alla cache line size per ridurre il
+false cache sharing, dato che più elementi dello stesso vettore
+cadono nella stessa cacheline (problema del false
+cache sharing - intervento dei protocolli di cache coherency e invalidazione dell' intera cacheline) - ma senza successo, probabilmente data la dimensione
+notevole del vettore e il numero elevato di thread che legge e scrive $y[i]$, questo porta a un numero maggiore di cache 
+misses, dato che una singola linea è occupata interamente da un singolo elemento e gli elementi sono tanti, con tanti
+thread che effettuano letture/scritture verso la memoria.
+
+Analizzando l'eseguibile con objdump inoltre, il compilatore emette istruzioni SIMD per il nucleo di calcolo (se l'
+architettura sottostante è compatibile). Visibili con il comando
+\begin{lstlisting}
+$ objdump --section=.text --disassemble=__kernel_csr._omp_fn.0 src/main/openmp/csr.o
+\end{lstlisting}
+
+Formalmente, il prodotto $y = Ax$ è un prodotto riga-colonna, ma sia $x$ che $y$ sono righe e non colonne (la cache
+viene sfruttata bene).
+
+\section{Parallelizzazione con CUDA}
+\textit{Il codice è localizzato in \texttt{src/main/cuda} e nei file \texttt{csr.cu} e \texttt{hll.cu} sono presenti il
+codice delle varianti dei nuclei e del codice che ne determina le dimensioni, mentre in \texttt{main.cu} è presente
+il codice che effettua la chiamata ai kernel CUDA.}
+
+Grazie alla flessibilità e l'organizzazione gerarchica dei thread in CUDA, è stato possibile produrre 3 versioni per il 
+prodotto con la matrice rappresentata in CSR e 2 per HLL.
+
+La gerarchia prevista per i kernel CUDA è la seguente:
+\begin{itemize}
+	\item Il kernel comprende la griglia
+	\item La griglia comprende i blocchi (dimensioni $(x,y,z)$)
+	\item I blocchi comprendono i thread (dimensioni $(x,y,z)$): 
+	tutti i thread del blocco verranno eseguiti su uno streaming multiprocessor e non possono essere spostati su altro SM.
+	\item La più piccola unità d'esecuzione è quella dei warp (tipicamente 32 thread), necessita attenzione per quanto
+	riguarda accessi alla memoria globale e condivisa, divergenza delle istruzioni e warp scheduling.
+\end{itemize}
+
+I tipi di memoria utilizzata sono due:
+\begin{itemize}
+	\item Memoria globale: è lenta e accessibile da tutti i thread in esecuzione sui vari SM, necessaria per la
+	comunicazione con l'host
+	\item Memoria condivisa: è veloce e condivisa dai thread in un blocco - non può essere utilizzata per la comunicazione
+	con l'host e richiede attenzione per quanto riguarda la sincronizzazione dei thread
+\end{itemize}
+	
+\subsection{CSR v1}
+Per quanto riguarda la variante CSR v1 è la più semplice possibile: ciascun thread in esecuzione sulla GPU si fa carico
+di effettuare la moltiplicazione di una riga della matrice (quella pari all'indice globale del thread) per il vettore
+$x$.
+
+L'implementazione ha l'unico vantaggio (rispetto agli altri)
+che il numero di warp è sicuramente inferiore rispetto alle altre due e quindi meno pressione sul warp scheduler.
+
+Data l'identificazione del thread in termini "globali" (ovvero su tutta la griglia del kernel)
+\begin{lstlisting}[language=C]
+const int thread_global_index = blockIdx.x * blockDim.x + threadIdx.x;
+\end{lstlisting}
+
+Sono presenti esclusivamente accessi in memoria globale:
+\begin{itemize}
+	\item \texttt{irp[thread\_global\_index]}: tra i thread del singolo warp, l'accesso è coalescente
+	\item \texttt{irp[thread\_global\_index + 1]}: tra i thread del singolo warp, l'accesso è coalescente
+	\item \texttt{as[j]}: tra i thread del singolo warp, l'accesso non è coalescente
+	\item \texttt{ja[j]}: tra i thread del singolo warp, l'accesso non è coalescente
+	\item \texttt{x[ja[j]]}: tra i thread del singolo warp, l'accesso non è coalescente
+	\item \texttt{y[thread\_global\_index]}: tra i thread del singolo warp, l'accesso è coalescente
+\end{itemize}
+
+Sono presenti problemi per quanto riguarda la divergenza delle istruzioni: essendo esecuzione SIMT su tutti i thread del
+warp, il thread che effettua la moltiplicazione per la riga con più nonzero è quello che limita l'intero warp.
+
+Può valere la pena trasferire il vettore $x$, essendo acceduto più volte, in memoria condivisa, tentativi sono stati
+effettuati, ma senza successo rispetto alle implementazioni realizzate.
+
+Le dimensioni del kernel sono legate al numero di righe: se è minore o uguale al massimo numero di thread in un blocco
+supportate dal device, allora la griglia ha dimensione $1\times1\times1$ e i blocchi hanno dimensione 
+$NumRows\times1\times1$. Altrimenti la griglia ha dimensione $CeilDiv(NumRows,MaxBlkPerThr)\times1\times1$ e i blocchi
+$MaxThrPerBlk\times1\times1$. 
+
+\begin{equation}\label{eq:ceildiv}
+CeilDiv(m,n) = \frac{m + n - 1}{n}
+\end{equation}
+
+Dove l'eq (\ref{eq:ceildiv}) consente di ottenere il numero di blocchi necessari per il kernel.
+
+Se $m$ non divide $n$, allora ci sarà un certo spreco di risorse 
+(in particolare, fino a $MaxBlkPerThr - 1$ thread inutilizzati in questo caso), più pressione sul warp scheduler,
+ma questi thread termineranno tutti rapidamente grazie al primo \texttt{if} - non c'è divergenza nei warps.
+
+\subsection{CSR v2}
+Nella seconda variante, solo il primo thread di ogni warp si fa carico di effettuare la moltiplicazione della riga 
+corrispondente all'indice globale del warp per $x$.
+
+Essendo solo uno il thread del warp che sta effettivamente svolgendo il prodotto scalare, non c'è possibilità di
+problemi di non coalescenza, ma il numero di warp è elevato e 31 thread sono "sprecati".
+
+Se $NumRows \le MaxThrPerBlk$ allora la dimensione del kernel è: per la griglia $1 \times 1 \times 1$, mentre per i
+blocchi $NumRows \cdot WarpSize \times 1 \times 1$. Altrimenti - griglia: $CeilDiv(NumRows \cdot WarpSize, MaxThrPerBlk) \times 1 \times 1$, blocchi: $MaxThrPerBlk \times 1 \times 1$
+
+\subsection{CSR v3}
+Nella terza variante, ciascun thread dello stesso warp moltiplica un certo numero di elementi nz della riga corrispondente
+all'indice globale del warp per i suoi corrispondenti in $x$.
+
+Si utilizza la memoria condivisa: ogni thread del warp inserisce nella memoria una parte della computazione del prodotto
+del vettore, dato che ogni thread del warp si fa carico di moltiplicare uno o più elementi della riga considerata 
+per il warp, per $x$. La suddivisione del carico di lavoro tra i thread è a rotazione:
+\begin{itemize}
+	\item Se i nonzero della riga sono $\le WarpSize$ allora ciascun thread dovrà processare un elemento della riga
+	(potenzialmente alcuni thread non dovranno fare nulla, se $nz_{row} < WarpSize$
+	
+	\item Altrimenti, il nonzero $WarpSize + 1$-esimo verrà assegnato al thread 0, il nonzero $WarpSize + 2$-esimo 
+	al thread 1 e cosi via\dots
+\end{itemize}
+
+Alla fine il primo thread di ciascun warp ha la responsabilità di effettuare la riduzione finale per completare il 
+prodotto scalare.
+
+Si osservi come non è stato necessario utilizzare le barriere di sincronizzazione offerte da \texttt{\_\_syncthreads()}:
+il primo thread di ciascun warp è interessato alle posizioni toccate da altri thread del suo stesso warp
+in memoria condivisa, la barriera serve a sincronizzare tutti i thread di un blocco.
+
+Per quanto riguarda gli accessi in memoria globale:
+
+\begin{lstlisting}[language=C]
+const int warp_global_index = (blockIdx.x * blockDim.x + threadIdx.x) / warpSize;
+\end{lstlisting}
+
+\begin{itemize}
+	\item \texttt{irp[warp\_global\_index]}: tutti i thread del warp accedono allo stesso indirizzo - broadcast del valore: accesso efficiente
+	\item \texttt{irp[warp\_global\_index + 1]}: tutti i thread del warp accedono allo stesso indirizzo - broadcast del valore: accesso efficiente
+	\item \texttt{as[j]}: per tutti i thread del warp, \texttt{irps} è uguale e \texttt{i = thread\_idx\_in\_warp} è l'indice del thread nel
+	warp, quindi usare come indice \texttt{j = irps + i} implica che tutti i thread che accederanno alla memoria (divergenza possibile): l'accesso è coalescente
+	\item \texttt{ja[j]}: stessa valutazione effettuata per \texttt{as[j]}
+	\item \texttt{x[ja[j]]}: l'accesso non è coalescente
+	\item \texttt{y[warp\_global\_index]}: un solo thread del warp vi accede
+\end{itemize}
+
+E per quanto riguarda la memoria condivisa, considerando che è divisa in 32 banchi da 4 byte (ospitando quindi indirizzi
+a rotazione) e che l'accesso è su un tipo di dato \texttt{double} a 8 byte
+
+\begin{itemize}
+	\item \texttt{row\_shmem[threadIdx.x] = 0}: two-way bank conflict presente
+	\item \texttt{row\_shmem[threadIdx.x] += \dots}: two-way bank conflict presente
+	\item \texttt{y[warp\_global\_index] += row\_shmem[\dots]}: nessun conflitto di banco presente dato che un
+	solo thread del warp vi accede
+\end{itemize}
+
+Se teniamo a mente la struttura della memoria condivisa:
+
+\begin{minipage}{\linewidth}
+\centering
+\begin{tabular}{|l l|}
+\hline
+\textbf{Banco} & \textbf{Indirizzo} \\
+\hline
+\hline
+Banco 0 & 0, 128,\dots \\
+Banco 1 & 4, 132,\dots \\
+Banco 2 & 8, 136,\dots \\
+\hline
+\vdots & \\
+\hline
+Banco 31 & 124, \dots \\
+\hline
+\end{tabular}
+\end{minipage}
+
+Allora ogni accesso a \texttt{row\_shmem} con indice \texttt{threadIdx.x} (dove l'indice è quello relativo al blocco) sarà 
+un two-way bank conflict perchè ogni thread del warp che accede alla memoria "occupa" due banchi:
+\texttt{row\_shmem[0]} accede all'indirizzo 0, \texttt{row\_shmem[1]} accede all'indirizzo 8, \dots
+\texttt{row\_shmem[15]} accede all'indirizzo 120, \texttt{row\_shmem[16]} accede all'indirizzo 128 (che appartiene al
+primo banco: sia il thread 16 che il thread 0 stanno effettuando una richiesta verso il banco 0 ma a un indirizzo 
+diverso).
+
+Un modo per evitare questo conflitto di banco può essere quello di passare all'aritmetica floating point a 32 bit.
+
+Le dimensioni per il kernel sono le stesse per quanto riguarda CSRv2 più la grandezza della shared memory che è pari
+alla grandezza dei blocchi(lungo la componente $x$) per il \texttt{sizeof(double)}.
+
+\subsection{HLL v1}
+La prima variante di HLL prevede che ogni thread gestisca un blocco ELL di $hs=32$ righe, è la variante più semplice
+possibile.
+
+Viene preso in considerazione il problema dell'allineamento della memoria nel caso di allocazione di matrici:
+\texttt{cudaMalloc} non allinea in maniera appropriata le righe, causando accessi non allineati alla memoria.
+
+E' stato quindi utilizzato \texttt{cudaMallocPitch} per allocare le matrici $JA$ e $AS$.
+
+Le matrici vengono trasposte prima della chiamata del kernel CUDA, tuttavia in questa variante non vi è accesso
+coalescente alle matrici.
+
+Accessi in memoria globale:
+\begin{itemize}
+	\item \texttt{as[thread\_global\_index]}: accesso coalescente per i thread del warp
+	\item \texttt{pitches\_as[thread\_global\_index]}: accesso coalescente per i thread del warp
+	\item \texttt{ja[thread\_global\_index]}: accesso coalescente per i thread del warp
+	\item \texttt{pitches\_ja[thread\_global\_index]}: accesso coalescente per i thread del warp
+	\item \texttt{maxnzs[thread\_global\_index]}: accesso coalescente per i thread del warp
+	\item \texttt{*at\_pitched\_matrix(double, my\_block\_as\_pitch, my\_block\_as, c, r)}: accesso non coalescente per i 
+	thread del warp
+	\item \texttt{*at\_pitched\_matrix(uint64\_t, my\_block\_ja\_pitch, my\_block\_ja, c, r)}: accesso non coalescente per 
+	i thread del warp
+	\item \texttt{x[\*at\_pitched\_matrix(uint64\_t, my\_block\_ja\_pitch, my\_block\_ja, c, r)]}: accesso non coalescente 
+	per i thread del warp
+	\item \texttt{y[i + thread\_global\_index * hs]}:
+\end{itemize}
+
+I primi due accessi non coalescenti sono dovuti al fatto che tutti i thread del warp lavorano su blocchi diversi,
+l'ultimo è sempre dovuto al fatto che le colonne nonzero nella matrice originale possono essere sparse.
+
+L'array di appoggio \texttt{double t[32]} rende il kernel CUDA impossibilitato a gestire hack sizes diversi da 32, 
+ma è la scelta migliore per quanto riguarda l'efficienza degli accessi (2 accessi nello stack del thread vs 2 accessi
+in memoria globale o condivisa).
+
+Le dimensioni del kernel sono $1 \times 1 \times 1$ per la griglia e $NumELLBlks \times 1 \times 1$ per i blocchi se il numero di blocchi ELL è minore di $MaxThrPerBlk$. Altrimenti la griglia è $CeilDiv(NumELLBlks, MaxThrPerBlk) \times 1 \times 1$, i blocchi $MaxThrPerBlk \times 1 \times 1$. 
+
+\subsection{HLL v2}
+L'ultima variante prevede che ogni warp si fa carico di un blocco ELL da $hs=32$ righe: ogni thread del warp processa
+una riga del blocco ELL,. Tutti i thread del warp scrivono in memoria condivisa il risultato del prodotto della riga che
+devono moltiplicare per $x$ (scalare)
+e alla fine il thread 0 di ogni warp effettua assegnamento finale dello scalare calcolato per 
+le righe del blocco.
+
+Per quanto riguarda la memoria globale:
+
+\begin{itemize}
+	\item \texttt{as[warp\_global\_index]}: broadcast del valore
+	\item \texttt{pitches\_as[warp\_global\_index]}: broadcast del valore
+	\item \texttt{ja[warp\_global\_index]}: broadcast del valore
+	\item \texttt{pitches\_ja[warp\_global\_index]}: broadcast del valore
+	\item \texttt{maxnzs[warp\_global\_index]}: broadcast del valore
+	\item \texttt{*at\_pitched\_matrix(double, my\_block\_as\_pitch, \\ my\_block\_as, c, thread\_idx\_in\_warp) }: accesso
+	coalescente alla matrice
+	\item \texttt{*at\_pitched\_matrix(uint64\_t, my\_block\_ja\_pitch, \\ my\_block\_ja, c, thread\_idx\_in\_warp)}: accesso
+	coalescente alla matrice
+	\item \texttt{x[*at\_pitched\_matrix(uint64\_t, my\_block\_ja\_pitch, \\ my\_block\_ja, c, thread\_idx\_in\_warp)]}:
+	accesso non coalescente al vettore $x$ (per gli stessi motivi dei casi precedenti)
+	\item \texttt{y[i + warp\_global\_index * hs]}: un solo thread del warp vi accede
+\end{itemize}
+
+Gli accessi sono coalescenti alla matrice grazie alla trasposta:
+
+\begin{minipage}{\linewidth}
+\centering
+\begin{tabular}{c c c} 
+$
+AS =
+\begin{pmatrix}
+AS_{11} & AS_{12} \\
+AS_{21} & AS_{22}
+\end{pmatrix}
+$ &
+$\rightarrow$ &
+$
+AS^{\top} =
+\begin{pmatrix}
+AS_{11} & AS_{21} \\
+AS_{12} & AS_{22}
+\end{pmatrix}
+$ \\
+\end{tabular}
+\end{minipage}
+
+E il thread 0 e il thread 1 scorrono sulle due righe con accessi coalescenti (sulla stessa colonna, accessi allo stesso
+istante):
+
+\begin{minipage}{\linewidth}
+\centering
+thread 0: $AS^{\top}[0][0]$, $AS^{\top}[1][0]$
+
+thread 1: $AS^{\top}[0][1]$, $AS^{\top}[1][1]$
+\end{minipage}
+
+Per la memoria condivisa invece:
+\begin{itemize}
+	\item \texttt{t\_shmem[(warp\_local\_index * warpSize) + thread\_idx\_in\_warp]}: two-way bank conflict presente
+	\item \texttt{t\_shmem[(warp\_local\_index * warpSize) + i]}: nessun conflitto, un solo thread accede
+\end{itemize}
+Anche stavolta non è stato necessario \texttt{\_\_syncthreads()}.
+
+Le dimensioni del kernel sono: $1 \times 1 \times 1$ per la griglia e $NumELLBlks \cdot WarpSize \times 1 \times 1$ per i blocchi, con
+shared memory pari a $NumELLBlks \cdot WarpSize \cdot sizeof(double)$ se il numero di blocchi ELL è minore o uguale
+al massimo numero di warps che un blocco può ospitare. Altrimenti \\ 
+$CeilDiv(NumELLBlks, MaxWarpsEachBlk) \times 1 \times 1$ 
+per la griglia, con \\ $MaxThrsPerBlk \times 1 \times 1$  per i blocchi, $MaxThrsPerBlk \cdot sizeof(double)$ per la shared
+memory.
+
+E' stato utile sfruttare tool come \texttt{cuda-memcheck} (che ora è diventato \\ \texttt{compute-sanitize --tool memcheck})
+come aiuto allo sviluppo dei kernel (sopratutto per HLL).
+
+\section{Analisi delle prestazioni ottenute}
+caratteristiche macchina
+specifica metrica
+
+\section{Breve guida alla compilazione e al run del progetto}
+
+\pagebreak
 	
 \section{Risultati ottenuti}
 	\subsection{Nonzeri delle matrici}
