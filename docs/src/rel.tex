@@ -98,6 +98,7 @@ per ciascun vettore ci si trovano le coordinate $(I(i), J(i))$ dell'elemento $i$
 il cui valore è $V(i) \neq 0$ .
 
 Il prodotto matrice-vettore come definito nell'introduzione al problema viene calcolato col seguente algoritmo:
+\vspace{\baselineskip}
 
 \begin{minipage}{\linewidth}
 \centering
@@ -117,6 +118,7 @@ sparsa originale è identificata dall'indice $i$ con la quale si accede a $IRP$ 
 a elementi nonzero sono quelle alla quale punta il range $IRP(i) \dots IRP(i + 1)$ nel vettore $JA$.
 
 Il prodotto matrice-vettore:
+\vspace{\baselineskip}
 
 \begin{minipage}{\linewidth}
 \centering
@@ -140,6 +142,7 @@ $JA$ e il numero di colonne è pari al $max$ di nonzeri su tutte le righe ($maxn
 E' possibile che vi siano molti zero di padding.
 
 Il prodotto matrice-vettore:
+\vspace{\baselineskip}
 
 \begin{minipage}{\linewidth}
 \centering
@@ -166,6 +169,7 @@ sparsa originale. L'ultimo blocco ELL da $hs$ righe può essere molto zero-padde
 sparsa non è divisibile per $hs$.
 
 Il prodotto matrice-vettore:
+\vspace{\baselineskip}
 
 \begin{minipage}{\linewidth}
 \centering
@@ -313,9 +317,12 @@ La gerarchia prevista per i kernel CUDA è la seguente:
 I tipi di memoria utilizzata sono due:
 \begin{itemize}
 	\item Memoria globale: è lenta e accessibile da tutti i thread in esecuzione sui vari SM, necessaria per la
-	comunicazione con l'host
+	comunicazione con l'host, allineamento e accesso coalescente sono fondamentali per garantire
+	buone prestazioni.
+	
 	\item Memoria condivisa: è veloce e condivisa dai thread in un blocco - non può essere utilizzata per la comunicazione
-	con l'host e richiede attenzione per quanto riguarda la sincronizzazione dei thread
+	con l'host e richiede attenzione per quanto riguarda la sincronizzazione dei thread e i 
+	bank conflict
 \end{itemize}
 	
 \subsection{CSR v1}
@@ -327,19 +334,32 @@ L'implementazione ha l'unico vantaggio (rispetto agli altri)
 che il numero di warp è sicuramente inferiore rispetto alle altre due e quindi meno pressione sul warp scheduler.
 
 Data l'identificazione del thread in termini "globali" (ovvero su tutta la griglia del kernel)
+\vspace{\baselineskip}
+
 \begin{lstlisting}[language=C]
 const int thread_global_index = blockIdx.x * blockDim.x + threadIdx.x;
 \end{lstlisting}
+\vspace{\baselineskip}
 
-Sono presenti esclusivamente accessi in memoria globale:
+Sono presenti esclusivamente accessi in memoria globale (dal file \textit{src/main/cuda/csr.cu}):
 \begin{itemize}
-	\item \texttt{irp[thread\_global\_index]}: tra i thread del singolo warp, l'accesso è coalescente
-	\item \texttt{irp[thread\_global\_index + 1]}: tra i thread del singolo warp, l'accesso è coalescente
-	\item \texttt{as[j]}: tra i thread del singolo warp, l'accesso non è coalescente
-	\item \texttt{ja[j]}: tra i thread del singolo warp, l'accesso non è coalescente
-	\item \texttt{x[ja[j]]}: tra i thread del singolo warp, l'accesso non è coalescente
-	\item \texttt{y[thread\_global\_index]}: tra i thread del singolo warp, l'accesso è coalescente
+	\item \textit{linea 40} - \texttt{irp[thread\_global\_index]}: tra i thread del singolo warp, l'accesso è coalescente
+	\item \textit{linea 40} - \texttt{irp[thread\_global\_index + 1]}: tra i thread del singolo warp, l'accesso è coalescente
+	\item \textit{linea 41} - \texttt{as[j]}: tra i thread del singolo warp, l'accesso non è coalescente
+	\item \textit{linea 41} - \texttt{ja[j]}: tra i thread del singolo warp, l'accesso non è coalescente
+	\item \textit{linea 41} - \texttt{x[ja[j]]}: tra i thread del singolo warp, l'accesso non è coalescente
+	\item \textit{linea 44} - \texttt{y[thread\_global\_index]}: tra i thread del singolo warp, l'accesso è coalescente
 \end{itemize}
+
+I primi due accessi non coalescenti sono dovuti al fatto che i thread del warp devono
+moltiplicare una riga ciascuno: è possibile che per due thread 0 e 1, \texttt{irp[0] = 0} e
+\texttt{irp[1] = 5} (e quindi l'indice viene incrementato dal \texttt{for}, \dots).
+
+L'ultimo accesso non coalescente 
+è dovuto al fatto che nella matrice sparsa vera e propria, i coefficienti nz sono
+appunto, sparsi e quindi è possibile che negli stessi istanti in cui un thread accede, tramite
+indirizzamento indiretto, a \texttt{x[0]}, un secondo thread dello stesso warp 
+accede a \texttt{x[10]}
 
 Sono presenti problemi per quanto riguarda la divergenza delle istruzioni: essendo esecuzione SIMT su tutti i thread del
 warp, il thread che effettua la moltiplicazione per la riga con più nonzero è quello che limita l'intero warp.
@@ -359,15 +379,19 @@ CeilDiv(m,n) = \frac{m + n - 1}{n}
 Dove l'eq (\ref{eq:ceildiv}) consente di ottenere il numero di blocchi necessari per il kernel.
 
 Se $m$ non divide $n$, allora ci sarà un certo spreco di risorse 
-(in particolare, fino a $MaxBlkPerThr - 1$ thread inutilizzati in questo caso), più pressione sul warp scheduler,
-ma questi thread termineranno tutti rapidamente grazie al primo \texttt{if} - non c'è divergenza nei warps.
+(in particolare, fino a $MaxBlkPerThr - 1$ thread inutilizzati in questo caso), più pressione sul warp scheduler.
+
+I thread che fanno parte dei warp completamente inutilizzati termineranno tutti rapidamente grazie 
+al primo \texttt{if} - non c'è divergenza in tali warps.
+
+In definitiva, è un costo da pagare accettabile per avere il numero di blocchi necessari.
 
 \subsection{CSR v2}
 Nella seconda variante, solo il primo thread di ogni warp si fa carico di effettuare la moltiplicazione della riga 
 corrispondente all'indice globale del warp per $x$.
 
 Essendo solo uno il thread del warp che sta effettivamente svolgendo il prodotto scalare, non c'è possibilità di
-problemi di non coalescenza, ma il numero di warp è elevato e 31 thread sono "sprecati".
+problemi di accesso non coalescente, ma il numero di warp è elevato e 31 thread sono "sprecati".
 
 Se $NumRows \le MaxThrPerBlk$ allora la dimensione del kernel è: per la griglia $1 \times 1 \times 1$, mentre per i
 blocchi $NumRows \cdot WarpSize \times 1 \times 1$. Altrimenti - griglia: $CeilDiv(NumRows \cdot WarpSize, MaxThrPerBlk) \times 1 \times 1$, blocchi: $MaxThrPerBlk \times 1 \times 1$
@@ -381,7 +405,7 @@ del vettore, dato che ogni thread del warp si fa carico di moltiplicare uno o pi
 per il warp, per $x$. La suddivisione del carico di lavoro tra i thread è a rotazione:
 \begin{itemize}
 	\item Se i nonzero della riga sono $\le WarpSize$ allora ciascun thread dovrà processare un elemento della riga
-	(potenzialmente alcuni thread non dovranno fare nulla, se $nz_{row} < WarpSize$
+	(potenzialmente alcuni thread non dovranno fare nulla, se $nz_{row} < WarpSize$)
 	
 	\item Altrimenti, il nonzero $WarpSize + 1$-esimo verrà assegnato al thread 0, il nonzero $WarpSize + 2$-esimo 
 	al thread 1 e cosi via\dots
@@ -394,33 +418,45 @@ Si osservi come non è stato necessario utilizzare le barriere di sincronizzazio
 il primo thread di ciascun warp è interessato alle posizioni toccate da altri thread del suo stesso warp
 in memoria condivisa, la barriera serve a sincronizzare tutti i thread di un blocco.
 
-Per quanto riguarda gli accessi in memoria globale:
+Per quanto riguarda gli accessi in memoria globale (dal file \textit{src/main/cuda/csr.cu}):
+\vspace{\baselineskip}
 
 \begin{lstlisting}[language=C]
 const int warp_global_index = (blockIdx.x * blockDim.x + threadIdx.x) / warpSize;
 \end{lstlisting}
 
 \begin{itemize}
-	\item \texttt{irp[warp\_global\_index]}: tutti i thread del warp accedono allo stesso indirizzo - broadcast del valore: accesso efficiente
-	\item \texttt{irp[warp\_global\_index + 1]}: tutti i thread del warp accedono allo stesso indirizzo - broadcast del valore: accesso efficiente
-	\item \texttt{as[j]}: per tutti i thread del warp, \texttt{irps} è uguale e \texttt{i = thread\_idx\_in\_warp} è l'indice del thread nel
-	warp, quindi usare come indice \texttt{j = irps + i} implica che tutti i thread che accederanno alla memoria (divergenza possibile): l'accesso è coalescente
-	\item \texttt{ja[j]}: stessa valutazione effettuata per \texttt{as[j]}
-	\item \texttt{x[ja[j]]}: l'accesso non è coalescente
-	\item \texttt{y[warp\_global\_index]}: un solo thread del warp vi accede
+	\item \textit{linea 118} - \texttt{irp[warp\_global\_index]}: tutti i thread del warp accedono allo stesso indirizzo - broadcast del valore: accesso efficiente
+	\item \textit{linea 119} - \texttt{irp[warp\_global\_index + 1]}: tutti i thread del warp accedono allo stesso indirizzo - broadcast del valore: accesso efficiente
+	\item \textit{linea 129} - \texttt{as[j]}: per tutti i thread del warp, \texttt{irps} è uguale e \\\texttt{i = thread\_idx\_in\_warp} è l'indice del thread nel
+	warp, quindi usare come indice per accedere a \texttt{as} e \texttt{ja}, \texttt{j = irps + i}, implica che tutti i thread che accederanno alla memoria lo faranno per
+	$$j = irps + 0,\;j = irps + 1,\;\dots,\;j = irps + 31$$
+	e se il numero di elementi nz della riga associata al warp è maggiore del warp size:
+	$$j = irps + 32,\;j = irps + 33,\;\dots$$
+	dove il primo indice $j$ sopra indicato del "secondo giro" ($j = irps + 32,\;\dots$)
+	è acceduto dal thread 0, il secondo dal thread 1 e cosi via.
+	
+	Quindi, se il numero di elementi nz della riga è multiplo di warpSize, non ci sarà
+	divergenza nel warp, altrimenti si: in ogni caso non è un problema per l'accesso alla memoria
+	l'accesso è coalescente.
+	\item \textit{linea 129} - \texttt{ja[j]}: stessa valutazione effettuata per \texttt{as[j]}
+	\item \textit{linea 129} - \texttt{x[ja[j]]}: l'accesso non è coalescente (per le stesse
+	motivazioni di CSRv1)
+	\item \textit{linea 136} - \texttt{y[warp\_global\_index]}: un solo thread del warp vi accede
 \end{itemize}
 
 E per quanto riguarda la memoria condivisa, considerando che è divisa in 32 banchi da 4 byte (ospitando quindi indirizzi
-a rotazione) e che l'accesso è su un tipo di dato \texttt{double} a 8 byte
+a rotazione) e che l'accesso è su un tipo di dato \texttt{double} a 8 byte (dal file \textit{src/main/cuda/csr.cu}):
 
 \begin{itemize}
-	\item \texttt{row\_shmem[threadIdx.x] = 0}: two-way bank conflict presente
-	\item \texttt{row\_shmem[threadIdx.x] += \dots}: two-way bank conflict presente
-	\item \texttt{y[warp\_global\_index] += row\_shmem[\dots]}: nessun conflitto di banco presente dato che un
+	\item \textit{linea 124} - \texttt{row\_shmem[threadIdx.x] = 0}: two-way bank conflict presente
+	\item \textit{linea 129} - \texttt{row\_shmem[threadIdx.x] += \dots}: two-way bank conflict presente
+	\item \textit{linea 136} - \texttt{\textit{y[warp\_global\_index]} += row\_shmem[\dots]}: nessun conflitto di banco presente dato che un
 	solo thread del warp vi accede
 \end{itemize}
 
 Se teniamo a mente la struttura della memoria condivisa:
+\vspace{\baselineskip}
 
 \begin{minipage}{\linewidth}
 \centering
@@ -440,12 +476,14 @@ Banco 31 & 124, \dots \\
 \end{tabular}
 \end{minipage}
 
+\vspace{\baselineskip}
+
 Allora ogni accesso a \texttt{row\_shmem} con indice \texttt{threadIdx.x} (dove l'indice è quello relativo al blocco) sarà 
 un two-way bank conflict perchè ogni thread del warp che accede alla memoria "occupa" due banchi:
 \texttt{row\_shmem[0]} accede all'indirizzo 0, \texttt{row\_shmem[1]} accede all'indirizzo 8, \dots
 \texttt{row\_shmem[15]} accede all'indirizzo 120, \texttt{row\_shmem[16]} accede all'indirizzo 128 (che appartiene al
 primo banco: sia il thread 16 che il thread 0 stanno effettuando una richiesta verso il banco 0 ma a un indirizzo 
-diverso).
+diverso, generando una situazione di memory bank conflict).
 
 Un modo per evitare questo conflitto di banco può essere quello di passare all'aritmetica floating point a 32 bit.
 
@@ -459,61 +497,63 @@ possibile.
 Viene preso in considerazione il problema dell'allineamento della memoria nel caso di allocazione di matrici:
 \texttt{cudaMalloc} non allinea in maniera appropriata le righe, causando accessi non allineati alla memoria.
 
-E' stato quindi utilizzato \texttt{cudaMallocPitch} per allocare le matrici $JA$ e $AS$.
+E' stato quindi utilizzato \texttt{cudaMallocPitch} per allocare le matrici $JA$ e $AS$ che
+caratterizzano i blocchi ELLPACK.
 
-Le matrici vengono trasposte prima della chiamata del kernel CUDA, tuttavia in questa variante non vi è accesso
-coalescente alle matrici.
+Le matrici vengono trasposte prima della chiamata del kernel CUDA, tuttavia in questa variante non
+vi è accesso coalescente alle matrici $JA$ e $AS$.
 
-Accessi in memoria globale:
+Accessi in memoria globale (dal file \textit{src/main/cuda/hll.cu}):
 \begin{itemize}
-	\item \texttt{as[thread\_global\_index]}: accesso coalescente per i thread del warp
-	\item \texttt{pitches\_as[thread\_global\_index]}: accesso coalescente per i thread del warp
-	\item \texttt{ja[thread\_global\_index]}: accesso coalescente per i thread del warp
-	\item \texttt{pitches\_ja[thread\_global\_index]}: accesso coalescente per i thread del warp
-	\item \texttt{maxnzs[thread\_global\_index]}: accesso coalescente per i thread del warp
-	\item \texttt{*at\_pitched\_matrix(double, my\_block\_as\_pitch, my\_block\_as, c, r)}: accesso non coalescente per i 
+	\item \textit{linea 44} - \texttt{as[thread\_global\_index]}: accesso coalescente per i thread del warp
+	\item \textit{linea 45} - \texttt{pitches\_as[thread\_global\_index]}: accesso coalescente per i thread del warp
+	\item \textit{linea 46} - \texttt{ja[thread\_global\_index]}: accesso coalescente per i thread del warp
+	\item \textit{linea 47} - \texttt{pitches\_ja[thread\_global\_index]}: accesso coalescente per i thread del warp
+	\item \textit{linea 48} - \texttt{maxnzs[thread\_global\_index]}: accesso coalescente per i thread del warp
+	\item \textit{linea 56} - \texttt{*at\_pitched\_matrix(double, my\_block\_as\_pitch, my\_block\_as, c, r)}: accesso non coalescente per i 
 	thread del warp
-	\item \texttt{*at\_pitched\_matrix(uint64\_t, my\_block\_ja\_pitch, my\_block\_ja, c, r)}: accesso non coalescente per 
+	\item \textit{linea 57} - \texttt{*at\_pitched\_matrix(uint64\_t, my\_block\_ja\_pitch,\\ my\_block\_ja, c, r)}: accesso non coalescente per 
 	i thread del warp
-	\item \texttt{x[\*at\_pitched\_matrix(uint64\_t, my\_block\_ja\_pitch, my\_block\_ja, c, r)]}: accesso non coalescente 
-	per i thread del warp
-	\item \texttt{y[i + thread\_global\_index * hs]}:
+	\item \textit{linea 57} - \texttt{x[*at\_pitched\_matrix(uint64\_t, my\_block\_ja\_pitch,\\ my\_block\_ja, c, r)]}: accesso non coalescente per i thread del warp
+	\item \textit{linea 69} - \texttt{y[i + thread\_global\_index * hs]}: accesso alla
+	memoria non è coalescente
 \end{itemize}
 
 I primi due accessi non coalescenti sono dovuti al fatto che tutti i thread del warp lavorano su blocchi diversi,
 l'ultimo è sempre dovuto al fatto che le colonne nonzero nella matrice originale possono essere sparse.
 
-L'array di appoggio \texttt{double t[32]} rende il kernel CUDA impossibilitato a gestire hack sizes diversi da 32, 
-ma è la scelta migliore per quanto riguarda l'efficienza degli accessi (2 accessi nello stack del thread vs 2 accessi
-in memoria globale o condivisa).
+L'array di appoggio \texttt{double t[32]} rende il kernel CUDA impossibilitato a gestire hack 
+sizes diversi da 32.
 
-Le dimensioni del kernel sono $1 \times 1 \times 1$ per la griglia e $NumELLBlks \times 1 \times 1$ per i blocchi se il numero di blocchi ELL è minore di $MaxThrPerBlk$. Altrimenti la griglia è $CeilDiv(NumELLBlks, MaxThrPerBlk) \times 1 \times 1$, i blocchi $MaxThrPerBlk \times 1 \times 1$. 
+Le dimensioni del kernel sono $1 \times 1 \times 1$ per la griglia e $NumELLBlks \times 1 \times 
+1$ per i blocchi se il numero di blocchi ELL è minore di $MaxThrPerBlk$. Altrimenti la griglia è 
+$CeilDiv(NumELLBlks, MaxThrPerBlk) \times 1 \times 1$, i blocchi $MaxThrPerBlk \times 1 \times 1$. 
 
 \subsection{HLL v2}
 L'ultima variante prevede che ogni warp si fa carico di un blocco ELL da $hs=32$ righe: ogni thread del warp processa
-una riga del blocco ELL,. Tutti i thread del warp scrivono in memoria condivisa il risultato del prodotto della riga che
-devono moltiplicare per $x$ (scalare)
+una riga del blocco ELL. Tutti i thread del warp scrivono in memoria condivisa il risultato del prodotto della riga che
+devono moltiplicare per $x$
 e alla fine il thread 0 di ogni warp effettua assegnamento finale dello scalare calcolato per 
-le righe del blocco.
+le righe del blocco ELL.
 
-Per quanto riguarda la memoria globale:
-
+Per quanto riguarda la memoria globale (dal file \textit{src/main/cuda/hll.cu}):
 \begin{itemize}
-	\item \texttt{as[warp\_global\_index]}: broadcast del valore
-	\item \texttt{pitches\_as[warp\_global\_index]}: broadcast del valore
-	\item \texttt{ja[warp\_global\_index]}: broadcast del valore
-	\item \texttt{pitches\_ja[warp\_global\_index]}: broadcast del valore
-	\item \texttt{maxnzs[warp\_global\_index]}: broadcast del valore
-	\item \texttt{*at\_pitched\_matrix(double, my\_block\_as\_pitch, \\ my\_block\_as, c, thread\_idx\_in\_warp) }: accesso
+	\item \textit{linea 115} - \texttt{as[warp\_global\_index]}: broadcast del valore
+	\item \textit{linea 116} - \texttt{pitches\_as[warp\_global\_index]}: broadcast del valore
+	\item \textit{linea 117} - \texttt{ja[warp\_global\_index]}: broadcast del valore
+	\item \textit{linea 118} - \texttt{pitches\_ja[warp\_global\_index]}: broadcast del valore
+	\item \textit{linea 119} - \texttt{maxnzs[warp\_global\_index]}: broadcast del valore
+	\item \textit{linea 124} - \texttt{*at\_pitched\_matrix(double, my\_block\_as\_pitch, \\ my\_block\_as, c, thread\_idx\_in\_warp) }: accesso
 	coalescente alla matrice
-	\item \texttt{*at\_pitched\_matrix(uint64\_t, my\_block\_ja\_pitch, \\ my\_block\_ja, c, thread\_idx\_in\_warp)}: accesso
+	\item \textit{linea 125} - \texttt{*at\_pitched\_matrix(uint64\_t, my\_block\_ja\_pitch, \\ my\_block\_ja, c, thread\_idx\_in\_warp)}: accesso
 	coalescente alla matrice
-	\item \texttt{x[*at\_pitched\_matrix(uint64\_t, my\_block\_ja\_pitch, \\ my\_block\_ja, c, thread\_idx\_in\_warp)]}:
+	\item \textit{linea 125} - \texttt{x[*at\_pitched\_matrix(uint64\_t, my\_block\_ja\_pitch, \\ my\_block\_ja, c, thread\_idx\_in\_warp)]}:
 	accesso non coalescente al vettore $x$ (per gli stessi motivi dei casi precedenti)
-	\item \texttt{y[i + warp\_global\_index * hs]}: un solo thread del warp vi accede
+	\item \textit{linea 137} - \texttt{y[i + warp\_global\_index * hs]}: un solo thread del warp vi accede
 \end{itemize}
 
-Gli accessi sono coalescenti alla matrice grazie alla trasposta:
+Gli accessi sono coalescenti alla matrice grazie alla trasposta di $AS$ e $JA$:
+\vspace{\baselineskip}
 
 \begin{minipage}{\linewidth}
 \centering
@@ -535,9 +575,11 @@ AS_{12} & AS_{22}
 $ \\
 \end{tabular}
 \end{minipage}
+\vspace{\baselineskip}
 
 E il thread 0 e il thread 1 scorrono sulle due righe con accessi coalescenti (sulla stessa colonna, accessi allo stesso
 istante):
+\vspace{\baselineskip}
 
 \begin{minipage}{\linewidth}
 \centering
@@ -545,13 +587,22 @@ thread 0: $AS^{\top}[0][0]$, $AS^{\top}[1][0]$
 
 thread 1: $AS^{\top}[0][1]$, $AS^{\top}[1][1]$
 \end{minipage}
+\vspace{\baselineskip}
 
-Per la memoria condivisa invece:
+\textit{Ovvero, la matrice $AS$ viene acceduta secondo [tid][i], ma essendo le matrici memorizzate
+per righe, non si riesce a ottenere accesso coalescente, mentre trasponendo $AS$ (e anche $JA$)
+per ottenere gli stessi valori rispetto allo schema di accesso originale, 
+l'accesso deve essere [i][tid]: in questo modo, essendo i tid
+variabili tra 0 e 31, si avrà accesso a [0][0] per il thread 0, [0][1] per il thread 1, \dots}
+
+Per la memoria condivisa invece (dal file \textit{src/main/cuda/hll.cu}):
 \begin{itemize}
-	\item \texttt{t\_shmem[(warp\_local\_index * warpSize) + thread\_idx\_in\_warp]}: two-way bank conflict presente
-	\item \texttt{t\_shmem[(warp\_local\_index * warpSize) + i]}: nessun conflitto, un solo thread accede
+	\item \textit{linea 128} - \texttt{t\_shmem[(warp\_local\_index * warpSize) + thread\_idx\_in\_warp]}: two-way bank conflict presente
+	\item \textit{linea 137} - \texttt{t\_shmem[(warp\_local\_index * warpSize) + i]}: nessun conflitto, un solo thread accede
 \end{itemize}
-Anche stavolta non è stato necessario \texttt{\_\_syncthreads()}.
+
+Anche stavolta non è stato necessario \texttt{\_\_syncthreads()} (per le stesse motivazioni
+di CSRv3).
 
 Le dimensioni del kernel sono: $1 \times 1 \times 1$ per la griglia e $NumELLBlks \cdot WarpSize \times 1 \times 1$ per i blocchi, con
 shared memory pari a $NumELLBlks \cdot WarpSize \cdot sizeof(double)$ se il numero di blocchi ELL è minore o uguale
@@ -564,10 +615,251 @@ E' stato utile sfruttare tool come \texttt{cuda-memcheck} (che ora è diventato 
 come aiuto allo sviluppo dei kernel (sopratutto per HLL).
 
 \section{Analisi delle prestazioni ottenute}
-caratteristiche macchina
-specifica metrica
+
+Le caratteristiche della macchina:
+
+\begin{itemize}
+	\item CPU: Intel(R) Xeon(R) Silver 4210 CPU @ 2.20GHz
+	\item NUMA:
+		\begin{itemize}
+  		\item NUMA node(s):          2
+  		\item NUMA node0 CPU(s):     0-9,20-29
+  		\item NUMA node1 CPU(s):     10-19,30-39
+  		\end{itemize}
+  	\item NVIDIA Quadro RTX 5000
+\end{itemize}
+
+La metrica di performance utilizzata sono i $GFLOPS$:
+
+\begin{equation*}
+FLOPS = \frac{2 \cdot NZ}{T}
+\end{equation*}
+dove:
+\begin{itemize}
+	\item $NZ$ è il numero di nonzeri della matrice sparsa
+	\item $T$ è il tempo medio impiegato per il calcolo
+\end{itemize}
+
+Sono state effettuate 50 misurazioni.
+
+In termini assoluti, i risultati migliori si ottengono con HLLv2 GPU (in tabella 
+\ref{table:hll_v2_gpu}), raggiungendo e superando i 45 GFLOPS (Cube\_Coup\_dt0), mentre quelli 
+peggiori in HLLv1 GPU (in tabella \ref{table:hll_v1_gpu}), con la maggior parte delle matrici 
+sparse prodotte per il
+vettore con prestazioni al di sotto del GFLOPS e raggiungendo un picco massimo di poco più di 
+2 GFLOPS (af\_1\_k101), è anche "impressionante" notare come la matrice dc1 sprofondi in termini
+di GFLOPS (0.0028). Il distacco tra la variante 1 e la variante 2 fa capire come il migliorare
+i pattern di accesso alla memoria globale impattino enormemente sulle prestazioni, ma anche
+migliorare la distribuzione del lavoro tenendo ben presente le gerarchie dei thread, sfruttare
+bene i warps.
+
+Rimanendo in tema GPU, la variante peggiore per CSR è sicuramente CSRv2 (in tabella \ref{table:csr_v2_gpu}), con picco massimo di 9.81 GFLOPS (Cube\_Coup\_dt0) e minimo di
+0.07 GFLOPS (dc1) - nonostante non siano possibili problemi di coalescenza e/o bank conflict,
+si può intuire che il problema sia dovuto a una gestione pessima delle risorse messe a disposizione
+della GPU: per risolvere un problema se ne creano altri - l'enorme numero di warps creati può 
+diventare un problema per il warp scheduler, o meglio, è uno spreco di risorse perchè un solo
+thread dell'intero warp processa un un'intera linea, mentre gli altri thread del warp, essendo
+gli SM "SIMT" occupano i core della GPU senza effettivamente svolgere lavoro utile. Questo implica
+, inoltre, che non sfruttiamo completamente l'architettura massivamente parallela delle GPU,
+assegnando troppo lavoro a un singolo thread.
+
+Invece, tra CSRv1 GPU (in tabella \ref{table:csr_v1_gpu}) e CSRv3 GPU (in tabella \ref{table:csr_v3_gpu}) non c'è un "chiaro vincitore", ma mentre in CSRv1 il picco è rappresentato
+dal calcolo della matrice sparsa roadNet-PA per il vettore $x$ con 24.65 GFLOPS, in CSRv3 sono
+presenti più matrici il cui prodotto è superiore ai 10 GFLOPS (in CSRv3 il picco è
+rappresentato da ML\_Laplace con 14.37 GFLOPS). Questa non netta distanza di prestazioni 
+può essere dovuta al comunque elevato numero di warps di CSRv3 rispetto a CSRv1, al maggior
+numero di accessi non coalescenti di CSRv1 rispetto a CSRv3, al peggior utilizzo dei warps
+di CSRv1 rispetto a CSRv3, ai 2-way bank conflict di mem. condivisa di CSRv3 rispetto a CSRv1.
+
+Passando alla computazione da parte della CPU, si notano principalmente due differenze rispetto
+alla GPU:
+\begin{itemize}
+	\item CSR è più performante su CPU che GPU
+	\item HLL è più performante su GPU che CPU
+	\item Anche se la varianza è praticamente nulla sia per CPU che GPU, si osserva
+	come la differenza tra i massimi e i minimi dei tempi di esecuzione
+	dei kernel eseguiti su GPU sia al di sotto del millisecondo, mentre su CPU la stessa
+	differenza è significativamente più alta (relativamente al caso GPU), ad esempio si veda
+	la tabella \ref{table:csr_3_v1_mt}, matrice af\_1\_k101 dove la differenza tra min e max 
+	è di circa 8 ms, o anche la tabella \ref{table:csr_4_v1_mt}, matrice Cube\_Coup\_dt0 dove
+	la differenza è di 100ms. Un ultimo esempio può essere in tabella \ref{table:hll_4_v1_mt},
+	con la matrice webbase-1M, dove la differenza è di circa 10ms.
+\end{itemize}
+
+Quest'ultima differenza è dovuta a due fattori principali: 
+
+\begin{itemize}
+	\item il calcolo svolto su CPU è eseguito da parte
+		di un normale processo (o meglio, threads)
+	in esecuzione sul SO insieme ad altri processi e può essere che il SO
+	tolga il controllo della CPU ai vari threads (il thread è CPU-intensive, il chè può far 
+	prendere certe decisioni allo scheduler, \dots)
+	
+	\begin{itemize}
+		\item La GPU è dedicata per l'esecuzione esclusiva del kernel
+	\end{itemize}
+	
+	\item molti dei massimi coincidono con la prima invocazione del nucleo di calcolo per la
+	particolare configurazione (es. HLL, 10 threads) - 
+	questo può essere riconducibile a cache misses iniziali
+\end{itemize}
+
+Sia per CSR che HLL, per avere un'overview delle prestazioni per quanto riguarda il calcolo
+su CPU, analizziamo i risultati per numero di thread $1,2,4,8,16,20,32,40$: la scelta è dettata
+dal fatto che tendenzialmente non cambia molto tra una configurazione a $i$ thread e una a $i+1$ 
+thread.
+
+Nel caso CSR, notiamo da subito immediati miglioramenti nel passaggio dalla configurazione seriale
+(in tabella \ref{table:csr_v1_ser}) e a 2 thread (in tabella \ref{table:csr_2_v1_mt}) - nella
+prima non si superano i 2.1 GFLOPS e nella seconda possiamo iniziare a notare il picco di 3.7 GFLOPS (cavity10), la media dei GFLOPS raggiunti aumenta. 
+
+Il trend continua anche con la
+configurazione a 4 thread (in tabella \ref{table:csr_4_v1_mt}) dove per la matrice af23560 si
+raggiunge un picco di 7.47 GFLOPS, la media continua ad aumentare (sia rispetto al caso seriale
+che due threads).
+
+Si ha un sostanziale salto in avanti nel caso a 8 thread (in tabella \ref{table:csr_8_v1_mt}), dove il massimo di 13.46 GFLOPS viene 
+raggiunto dal nucleo eseguito sulla matrice FEM\_3d\_thermal1, e ovviamente la media aritmetica 
+dei GFLOPS continua ad aumentare in modo evidente (rispetto a tutti i casi precedenti).
+
+Prima di proseguire con il caso a 16 thread, vale la pena notare che CSR a 10 thread (tabella \ref{table:csr_10_v1_mt}) offre
+ottime prestazioni, più che confermare il trend di incremento della media, che sembra essere più
+contenuto rispetto ai passi precedenti, molti valori superano i 12 GFLOPS con picco di 15.97 
+GFLOPS per af23560.
+
+Nel caso a 16 thread (in tabella \ref{table:csr_16_v1_mt}), 
+non si riesce a notare un sostanziale incremento della media dei GFLOPS,
+ne picchi che superino i circa 16 GFLOP raggiunti in CSR a 10 thread.
+
+Nel caso a 20 thread (in tabella \ref{table:csr_20_v1_mt}) c'è una ripresa generale del
+miglioramento (sempre contenuto delle prestazioni), con picco di 18.6 GFLOPS per il 
+calcolo eseguito su FEM\_3D\_thermal1
+
+Prima di analizzare il caso a 32 thread, bisogna notare che dal caso a 21 thread (in tabella \ref{table:csr_21_v1_mt}), le prestazioni tendono a peggiorare, anche se vengono raggiunti nuovi
+picchi, ma sono casi isolati. 
+
+Anche se c'è una ripresa, fino al caso a 32
+thread (tabella \ref{table:csr_32_v1_mt}) le prestazioni rimangono pressochè simili rispetto
+ai casi analizzati in precedenza (fino ai 16/20 thread) ma viene raggiunto un nuovo picco di 
+25.20 GFLOPS per la matrice olafu.
+
+In CSR a 40 thread (tabella \ref{table:csr_40_v1_mt}) nuovi il nuovo picco di 27.86 GFLOPS per 
+il kernel eseguito sulla matrice olafu viene raggiunto, tuttavia, mentre per molte matrici il 
+kernel sembra raggiungere più di 10 GFLOPS, per altre la situazione sembra peggiorata e per altre
+invariata.
+
+In definitiva, superato un certo numero di thread le prestazioni non sembrano migliorare, o
+comunque non sostanzialmente come avveniva nel primo caso: in particolare superati i 20 thread
+diventa difficile stabilire quando c'è un effettivo miglioramento delle prestazioni (anche se 
+comunque è evidente rispetto al caso seriale) - il fatto
+che per alcune matrici si raggiungano nuovi massimi di GFLOPS, rimangono casi isolati: alcune
+peggiorano, per molte la metrica è sostanzialmente invariata.
+
+Perchè all'aumentare dei thread non è detto che le prestazioni migliorino o possono addirittura
+peggiorare? All'aumentare dei thread aumentano anche i cache misses, oppure usare un thread può
+diventare svantaggioso se il lavoro che effettua è troppo poco, per esempio per la matrice
+"cage4" non si nota alcun miglioramento rispetto al caso seriale, è estremamente piccola ($9\times9$) 
+e l'overhead dettato dalla runtime di OpenMP è maggiore rispetto ai benefici di parallelizzare
+un prodotto matrice sparsa CSR-vettore per cage4.
+
+Per quanto riguarda HLL, partiamo da subito col notare come nel caso seriale (tabella 
+\ref{table:hll_v1_ser}) sia peggiore rispetto al caso seriale CSR, e in generale, le prestazioni
+siano peggiori anche nei vari casi multithread rispetto ai corrispettivi CSR (molto peggiori).
+
+Rispetto al caso HLL seriale, nel caso a 2 thread (tabella \ref{table:hll_2_v1_mt}) c'è un buon 
+miglioramento con l'esecuzione della matrice FEM\_3D\_thermal1 che reggiunge picco di 2.89 GFLOPS,
+la media generale sembra aumentare.
+
+Miglioramento sostanziale rispetto ai casi precedenti anche per HLL a 4 threads (tabella 
+\ref{table:hll_4_v1_mt}) con picco di 5.87 GFLOPS raggiunto per FEM\_3D\_thermal1 e media in
+evidente aumento.
+
+Nel caso HLL a 8 threads (tabella \ref{table:hll_8_v1_mt}) il kernel eseguito su af23560
+raggiunge picco di 9.56 GFLOPS, la media sembra aumentare ma in modo abbastanza meno evidente
+rispetto ai casi precedenti.
+
+Nel caso HLL a 16 threads (tabella \ref{table:hll_16_v1_mt}) il kernel eseguito sulle matrici
+FEM\_3D\_thermal1 raggiunge picco di 11.61 GFLOPS, ma la media generale non sembra variare molto.
+
+Nel caso HLL a 20 threads (tabella \ref{table:hll_20_v1_mt}) il kernel eseguito sulle matrici
+sembra avere prestazioni evidentemente molto simili rispetto al caso a 16 thread.
+
+Prima di proseguire, le prestazioni di HLL a 22 threads (tabella \ref{table:hll_22_v1_mt}) 
+iniziano a peggiorare rispetto ai casi precedenti (prestazioni paragonabili a HLL a 8 threads),
+mentre le prestazioni sembrano ricominciare a migliorare dalla configurazione a 23 threads, 
+rimanendo più o meno stabili fino alla configurazione a 32 threads (tabella 
+\ref{table:hll_32_v1_mt}), inferiori rispetto alla configurazione a 20 threads ma superiori 
+rispetto alla configurazione a 8 threads.
+
+Tra la configurazione a 32 threads e quella a 40 (tabella \ref{hll_40_v1_mt}), le prestazioni
+rimangono invariate.
+
+Anche per HLL, la scelta ottimale sembra essere quella di usare 20 threads.
+
+In tutti i casi, risulta evidente che le prestazioni di HLL su CPU siano molto peggiori rispetto
+a CSR, sia per lo stesso numero di threads / seriale, sia per HLL a 20 thread rispetto a altre 
+configurazioni CSR.
+
+Per le GPU, è invece evidente il contrario (fatte le dovute ottimizzazioni del kernel CUDA).
 
 \section{Breve guida alla compilazione e al run del progetto}
+
+Dopo aver clonato il repository:
+
+\begin{enumerate}
+	\item 
+\begin{lstlisting}
+$ module load cuda/12.4 gnu/13.3.0
+\end{lstlisting}
+
+	\item 
+\begin{lstlisting}
+$ cd sparse-mat-product
+\end{lstlisting}
+
+	\item 
+\begin{lstlisting}
+$ make
+\end{lstlisting}
+
+	\item 
+\begin{lstlisting}
+$ cd bin/release
+\end{lstlisting}
+
+	\item 
+\begin{lstlisting}
+$ ./sparse-mat-product-<serial/openmp/cuda>
+\end{lstlisting}
+\end{enumerate}
+
+Tutti e 3 gli applicativi scaricano automaticamente le matrici richieste per il 
+collaudo se non presenti: si può disattivare la funzionalità passando alla cmdline
+l'opzione -d. 
+
+Di default, le matrici controlla la directory 
+\$HOME/.scpa2425\_cachedir\_sparse\_mat\_prod per i file .mtx da caricare e utilizzare.
+
+Si può modificare la directory con l'opzione \texttt{-m <dir ricerca file mtx>}.
+
+Si può modificare il numero di invocazioni dei kernel con l'opzione \texttt{-n <num of trials>}
+
+\textbf{Esempio}
+
+Effettua 100 invocazioni, non effettua il controllo per scaricare i file mtx necessari al collaudo:
+\begin{lstlisting}
+$ ./sparse-mat-product-serial -n 100 -d
+\end{lstlisting}
+
+Utilizza una directory specifica con i file mtx, non effettua controllo per eventuale download:
+\begin{lstlisting}
+$ ./sparse-mat-product-cuda -d -m my-own-mtx-dir
+\end{lstlisting}
+
+Specifica un'altra directory per i file mtx ma effettua download se file non sono presenti:
+\begin{lstlisting}
+$ ./sparse-mat-product-openmp -m my-own-mtx-dir
+\end{lstlisting}
 
 \pagebreak
 	
