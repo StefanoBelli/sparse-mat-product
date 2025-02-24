@@ -644,10 +644,10 @@ Sono state effettuate 50 misurazioni.
 
 In termini assoluti, i risultati migliori si ottengono con HLLv2 GPU (in tabella 
 \ref{table:hll_v2_gpu}), raggiungendo e superando i 45 GFLOPS (Cube\_Coup\_dt0), mentre quelli 
-peggiori in HLLv1 GPU (in tabella \ref{table:hll_v1_gpu}), con la maggior parte delle matrici 
+peggiori in HLLv1 GPU (in tabella \ref{table:hll_v1_gpu}), con la maggior parte delle chiamate al kernel su matrici 
 sparse prodotte per il
-vettore con prestazioni al di sotto del GFLOPS e raggiungendo un picco massimo di poco più di 
-2 GFLOPS (af\_1\_k101), è anche "impressionante" notare come la matrice dc1 sprofondi in termini
+vettore con prestazioni al di sotto del GFLOP e raggiungendo un picco massimo di poco più di 
+2 GFLOPS (af\_1\_k101), è anche "impressionante" notare come il kernel eseguito sulla matrice dc1 sprofondi in termini
 di GFLOPS (0.0028). Il distacco tra la variante 1 e la variante 2 fa capire come il migliorare
 i pattern di accesso alla memoria globale impattino enormemente sulle prestazioni, ma anche
 migliorare la distribuzione del lavoro tenendo ben presente le gerarchie dei thread, sfruttare
@@ -664,7 +664,7 @@ gli SM "SIMT" occupano i core della GPU senza effettivamente svolgere lavoro uti
 assegnando troppo lavoro a un singolo thread.
 
 Invece, tra CSRv1 GPU (in tabella \ref{table:csr_v1_gpu}) e CSRv3 GPU (in tabella \ref{table:csr_v3_gpu}) non c'è un "chiaro vincitore", ma mentre in CSRv1 il picco è rappresentato
-dal calcolo della matrice sparsa roadNet-PA per il vettore $x$ con 24.65 GFLOPS, in CSRv3 sono
+dal prodotto della matrice sparsa roadNet-PA per il vettore $x$ con 24.65 GFLOPS, in CSRv3 sono
 presenti più matrici il cui prodotto è superiore ai 10 GFLOPS (in CSRv3 il picco è
 rappresentato da ML\_Laplace con 14.37 GFLOPS). Questa non netta distanza di prestazioni 
 può essere dovuta al comunque elevato numero di warps di CSRv3 rispetto a CSRv1, al maggior
@@ -680,8 +680,8 @@ alla GPU:
 	come la differenza tra i massimi e i minimi dei tempi di esecuzione
 	dei kernel eseguiti su GPU sia al di sotto del millisecondo, mentre su CPU la stessa
 	differenza è significativamente più alta (relativamente al caso GPU), ad esempio si veda
-	la tabella \ref{table:csr_3_v1_mt}, matrice af\_1\_k101 dove la differenza tra min e max 
-	è di circa 8 ms, o anche la tabella \ref{table:csr_4_v1_mt}, matrice Cube\_Coup\_dt0 dove
+	la tabella \ref{table:csr_3_v1_mt}, matrice af\_1\_k101, dove la differenza tra min e max 
+	è di circa 8 ms, o anche la tabella \ref{table:csr_4_v1_mt}, matrice Cube\_Coup\_dt0, dove
 	la differenza è di 100ms. Un ultimo esempio può essere in tabella \ref{table:hll_4_v1_mt},
 	con la matrice webbase-1M, dove la differenza è di circa 10ms.
 \end{itemize}
@@ -700,7 +700,7 @@ Quest'ultima differenza è dovuta a due fattori principali:
 	\end{itemize}
 	
 	\item molti dei massimi coincidono con la prima invocazione del nucleo di calcolo per la
-	particolare configurazione (es. HLL, 10 threads) - 
+	particolare configurazione - 
 	questo può essere riconducibile a cache misses iniziali
 \end{itemize}
 
@@ -732,7 +732,7 @@ non si riesce a notare un sostanziale incremento della media dei GFLOPS,
 ne picchi che superino i circa 16 GFLOP raggiunti in CSR a 10 thread.
 
 Nel caso a 20 thread (in tabella \ref{table:csr_20_v1_mt}) c'è una ripresa generale del
-miglioramento (sempre contenuto delle prestazioni), con picco di 18.6 GFLOPS per il 
+miglioramento (sempre contenuto) delle prestazioni, con picco di 18.6 GFLOPS per il 
 calcolo eseguito su FEM\_3D\_thermal1
 
 Prima di analizzare il caso a 32 thread, bisogna notare che dal caso a 21 thread (in tabella \ref{table:csr_21_v1_mt}), le prestazioni tendono a peggiorare, anche se vengono raggiunti nuovi
@@ -743,20 +743,22 @@ thread (tabella \ref{table:csr_32_v1_mt}) le prestazioni rimangono pressochè si
 ai casi analizzati in precedenza (fino ai 16/20 thread) ma viene raggiunto un nuovo picco di 
 25.20 GFLOPS per la matrice olafu.
 
-In CSR a 40 thread (tabella \ref{table:csr_40_v1_mt}) nuovi il nuovo picco di 27.86 GFLOPS per 
-il kernel eseguito sulla matrice olafu viene raggiunto, tuttavia, mentre per molte matrici il 
+In CSR a 40 thread (tabella \ref{table:csr_40_v1_mt}) viene raggiunto 
+il nuovo picco di 27.86 GFLOPS per 
+il kernel eseguito sulla matrice olafu, tuttavia, mentre per molte matrici il 
 kernel sembra raggiungere più di 10 GFLOPS, per altre la situazione sembra peggiorata e per altre
 invariata.
 
 In definitiva, superato un certo numero di thread le prestazioni non sembrano migliorare, o
-comunque non sostanzialmente come avveniva nel primo caso: in particolare superati i 20 thread
+comunque non sostanzialmente come avveniva fino a quel punto: in particolare superati i 20 thread
 diventa difficile stabilire quando c'è un effettivo miglioramento delle prestazioni (anche se 
 comunque è evidente rispetto al caso seriale) - il fatto
 che per alcune matrici si raggiungano nuovi massimi di GFLOPS, rimangono casi isolati: alcune
 peggiorano, per molte la metrica è sostanzialmente invariata.
 
 Perchè all'aumentare dei thread non è detto che le prestazioni migliorino o possono addirittura
-peggiorare? All'aumentare dei thread aumentano anche i cache misses, oppure usare un thread può
+peggiorare? All'aumentare dei thread aumentano anche i cache misses (a causa dell'issuing di un
+ maggior numero di istruzioni load/store), oppure usare un thread può
 diventare svantaggioso se il lavoro che effettua è troppo poco, per esempio per la matrice
 "cage4" non si nota alcun miglioramento rispetto al caso seriale, è estremamente piccola ($9\times9$) 
 e l'overhead dettato dalla runtime di OpenMP è maggiore rispetto ai benefici di parallelizzare
@@ -767,7 +769,7 @@ Per quanto riguarda HLL, partiamo da subito col notare come nel caso seriale (ta
 siano peggiori anche nei vari casi multithread rispetto ai corrispettivi CSR (molto peggiori).
 
 Rispetto al caso HLL seriale, nel caso a 2 thread (tabella \ref{table:hll_2_v1_mt}) c'è un buon 
-miglioramento con l'esecuzione della matrice FEM\_3D\_thermal1 che reggiunge picco di 2.89 GFLOPS,
+miglioramento con l'esecuzione del kernel sulla matrice FEM\_3D\_thermal1 che reggiunge picco di 2.89 GFLOPS,
 la media generale sembra aumentare.
 
 Miglioramento sostanziale rispetto ai casi precedenti anche per HLL a 4 threads (tabella 
@@ -788,10 +790,10 @@ Prima di proseguire, le prestazioni di HLL a 22 threads (tabella \ref{table:hll_
 iniziano a peggiorare rispetto ai casi precedenti (prestazioni paragonabili a HLL a 8 threads),
 mentre le prestazioni sembrano ricominciare a migliorare dalla configurazione a 23 threads, 
 rimanendo più o meno stabili fino alla configurazione a 32 threads (tabella 
-\ref{table:hll_32_v1_mt}), inferiori rispetto alla configurazione a 20 threads ma superiori 
+\ref{table:hll_32_v1_mt}): inferiori rispetto alla configurazione a 20 threads ma superiori 
 rispetto alla configurazione a 8 threads.
 
-Tra la configurazione a 32 threads e quella a 40 (tabella \ref{hll_40_v1_mt}), le prestazioni
+Tra la configurazione a 32 threads e quella a 40 (tabella \ref{table:hll_40_v1_mt}), le prestazioni
 rimangono invariate.
 
 Anche per HLL, la scelta ottimale sembra essere quella di usare 20 threads.
@@ -837,7 +839,7 @@ Tutti e 3 gli applicativi scaricano automaticamente le matrici richieste per il
 collaudo se non presenti: si può disattivare la funzionalità passando alla cmdline
 l'opzione -d. 
 
-Di default, le matrici controlla la directory 
+Di default, le matrici vengono memorizzate e cercate nella directory \\
 \$HOME/.scpa2425\_cachedir\_sparse\_mat\_prod per i file .mtx da caricare e utilizzare.
 
 Si può modificare la directory con l'opzione \texttt{-m <dir ricerca file mtx>}.
@@ -851,7 +853,7 @@ Effettua 100 invocazioni, non effettua il controllo per scaricare i file mtx nec
 $ ./sparse-mat-product-serial -n 100 -d
 \end{lstlisting}
 
-Utilizza una directory specifica con i file mtx, non effettua controllo per eventuale download:
+Utilizza una directory diversa da quella di default per i file mtx, non effettua controllo per eventuale download:
 \begin{lstlisting}
 $ ./sparse-mat-product-cuda -d -m my-own-mtx-dir
 \end{lstlisting}
