@@ -1,0 +1,423 @@
+\documentclass{beamer}
+
+\usepackage[utf8]{inputenc}
+\usepackage[italian]{babel}
+
+\usetheme{Boadilla}
+
+\title[Prodotto SpMV parallelo]
+{Prodotto matrice sparsa-vettore parallelo}
+\subtitle{SCPA project a.y. 2024/2025}
+\author[Stefano Belli, 0350116]{Stefano Belli, matricola 0350116}
+\institute[uniroma2]{Università degli Studi di Roma "Tor Vergata"}
+\date{}
+
+\setbeamertemplate{navigation symbols}{}
+\setbeamertemplate{enumerate items}[default]
+
+\newcommand{\dflvspace}{\vspace{10pt}}
+
+\renewcommand{\footnotesize}{\tiny}
+
+\begin{document}
+
+\begin{frame}
+    \titlepage
+\end{frame}
+
+\begin{frame}
+    \frametitle{Agenda}
+    \tableofcontents
+\end{frame}
+
+\section{Il problema da affrontare}
+\begin{frame}
+    \frametitle{Il problema da affrontare}
+    
+    Si vuole effettuare una moltiplicazione matrice sparsa-vettore (SpMV):
+    \begin{equation*}
+    y = Ax
+    \end{equation*}
+    
+    \dflvspace
+    \dflvspace
+    
+    \begin{itemize}
+    	\item Rappresentare una matrice sparsa $A$ interamente è un'inutile spreco di memoria.
+    	
+    	\item Usare la rappresentazione intera per l'SpMV implica l'esecuzione di operazioni il 
+    	cui risultato è noto ($0 \cdot a = 0\;\;\forall a$), quindi spreco di risorse di calcolo
+    
+    	\item Occorre fare affidamento a dei formati di rappresentazione alternativi
+    \end{itemize}
+    
+\end{frame}
+
+\section{Formati di rappresentazioni delle matrici sparse}
+\begin{frame}
+    \frametitle{Formati di rappresentazioni delle matrici sparse}
+    
+    Per ovviare al problema, si possono rappresentare in memoria le matrici con vari formati
+    di rappresentazione, ne esistono moltissimi ma quelli che ci interessano sono:
+    
+    \dflvspace
+    
+    \begin{itemize}
+    	\item \textbf{COO} - COOrdinate format
+    	\item \textbf{CSR} - Compressed Storage by Rows
+    	\item \textbf{ELL} - ELLPACK
+    	\item \textbf{HLL} - Insieme di blocchi ELL
+    \end{itemize}
+    
+    \dflvspace
+    
+    \begin{alertblock}{Implementazione di SpMV problematica}
+    Possiamo dire che per tutti i formati, implementare la SpMV è problematico: la 
+    rappresentazione compressa e l'indirizzamento indiretto implicano un \textbf{maggior numero di 
+    operazioni verso la memoria} (risp. alle fl.ops.)
+    e l'\textbf{impossibilità di sfruttare appieno la cache locality}.
+    \end{alertblock}
+\end{frame}
+
+\section{Conversione dei formati delle matrici sparse}
+\begin{frame}
+    \frametitle{Conversione dei formati delle matrici sparse}
+    
+    \begin{itemize}
+    	\item Le matrici scaricate dal sito \url{https://sparse.tamu.edu/} e salvate sul 
+    		filesystem
+    	\item Le matrici vengono lette dal file in formato MatrixMarket con l'ausilio di
+    		\url{https://math.nist.gov/MatrixMarket/mmio/c/mmio.h} e 
+    		\url{https://math.nist.gov/MatrixMarket/mmio/c/mmio.c} e convertite in COO
+    	\begin{itemize}
+    		\item Avviene la conversione in COO di matrici che siano
+    		reali o pattern e generali o simmetriche
+    		\item Se la matrice è simmetrica bisogna ricostruire il triangolo mancante
+    		\item Bisogna tenere opportunamente traccia degli explicit zeroes
+    		\item Bisogna riportare gli indici in base 0
+    	\end{itemize}
+    	
+    	\item Da COO, le matrici vengono convertite, quando necessario, in CSR o HLL
+    \end{itemize}
+\end{frame}
+
+\section{Misurazione delle prestazioni}
+\begin{frame}
+    \frametitle{Misurazione delle prestazioni}
+    
+    Le misure di prestazioni sono avvenute sul server di dipartimento, che ha le seguenti 
+    \textbf{caratteristiche tecniche}:
+    
+    \begin{itemize}
+    	\item CPU: Intel(R) Xeon(R) Silver 4210 CPU @ 2.20GHz (40 CPUs)
+    	\item NUMA:
+    	\begin{itemize}
+    		\item NUMA node(s): 2
+    		\item NUMA node0 CPU(s): 0-9,20-29
+    		\item NUMA node1 CPU(s): 10-19,30-39
+    	\end{itemize}
+    	\item GPU: NVIDIA Quadro RTX 5000
+    \end{itemize}
+    
+    La \textbf{metrica} utilizzata per misurare le prestazioni sono i $FLOPS$:
+    \begin{equation*}
+    FLOPS = \frac{2 \cdot NZ}{T}
+    \end{equation*}
+    
+    dove $NZ$ è il numero di nonzeri della matrice e 
+    $T$ è la media in secondi del tempo d'esecuzione del kernel
+    
+    Per ogni kernel \textbf{vengono effettuate} 50 esecuzioni.
+    
+\end{frame}
+
+\section{Implementazione SpMV seriale}
+\begin{frame}
+    \frametitle{Implementazione SpMV seriale}
+    
+    \begin{itemize}
+    	\item Il prodotto SpMV seriale è stato implementato sia per CSR che HLL.
+    
+    	\item L'algoritmo è quello classico per entrambi, non presenta particolarità, per
+    	HLL, l'hack size è di 1024
+    	
+    	\item Parallelizzare gli algoritmi aiuta a migliorarne le prestazioni
+    \end{itemize}
+    
+\end{frame}
+
+\section{Implementazione SpMV CSR con OpenMP}
+\begin{frame}
+    \frametitle{Implementazione SpMV CSR con OpenMP}
+    \begin{itemize}    
+    	\item Per il nucleo di calcolo CSR, ogni 
+    	iterazione corrisponde a una riga della matrice sparsa.
+    	
+    	\begin{itemize}
+    		\item Assunzione di uniformità di carico, anche se in realtà il numero di
+    		nonzeri per riga può essere diverso
+    		\item L'effetto è meno evidente rispetto ad HLL: il loop che effettua prodotto
+    		scalare è uno solo
+    		\item Usare \texttt{schedule(dynamic)} in questo caso non ne giustifica l'overhead 
+    	\end{itemize}
+    	
+    	\item Utilizzando la direttiva del preprocessore
+    	\texttt{\#pragma omp parallel for schedule(static)}
+    	permettiamo al compilatore di gestire automaticamente e in modo
+    	trasparente la gestione dei thread.
+    	
+    	\item Con \texttt{schedule(static)}, la runtime di OpenMP preassegna un certo
+    	numero di iterazioni del ciclo ai vari thread, il cui numero è impostato
+    	con la chiamata \texttt{omp\_set\_num\_threads()} in modo equo
+    	
+    	\begin{itemize}
+    		\item Overhead dovuto alla runtime omp nullo o quasi: 
+    		l'assegnazione è fissa e non varia
+    		\item I thread ricevono un certo set di iterazioni da processare, in modo equo,
+    		le iterazioni assegnate a ciascun thread sono contigue
+    	\end{itemize}
+    \end{itemize}
+    
+\end{frame}
+
+\section{Implementazione SpMV HLL con OpenMP}
+\begin{frame}
+    \frametitle{Implementazione SpMV HLL con OpenMP}
+    
+    \begin{itemize}
+    	\item Per il nucleo HLL, ogni iterazione corrisponde a un blocco ELL
+    	\item \texttt{\#pragma omp parallel for schedule(dynamic)}
+    	\begin{itemize}
+    		\item Il parametro $hs = 1024$
+    		\item I blocchi ELL possono avere un numero di colonne ($maxnz$) molto diverso 
+    		\item Alcuni thread potrebbero gestire blocchi ELL più piccoli (o più grandi)
+    	\end{itemize}
+    	\item Utilizzando \texttt{schedule(dynamic)}, i thread hanno la possibilità
+    	di "pescare" tra il pool di iterazioni ancora da processare e non seguire una
+    	preassegnazione statica.
+    	\begin{itemize}
+    		\item Overhead maggiore (risp. sched. static)
+    		dovuto alla scelta delle iterazioni ogni volta che il thread
+    		termina il lavoro corrrente 
+    		\item Bilanciamento del carico (efficiente nel caso di iterazioni
+    		che richiedono tempo d'esecuzione differente)
+    	\end{itemize}
+    \end{itemize}
+\end{frame}
+
+\subsection{Qualche misura di prestazioni per OpenMP}
+\begin{frame}
+    \frametitle{Qualche misura di prestazioni per OpenMP}
+    
+    \begin{table}
+    \centering
+    \begin{tabular}{| l | c | c | c | c | c | c |}
+    \hline
+    & \textbf{1} & \textbf{4} & \textbf{8} & \textbf{16} & \textbf{32} & \textbf{40} \\
+    \hline
+    \hline
+    \textbf{Cube\_Coup\_dt0} & 1.39 & 3.79 & 4.27 & 5.10 & 5.62 & 4.86 \\
+    \textbf{ML\_Laplace} & 1.46 & 3.72 & 4.25 & 6.47 & 7.65 & 7.62 \\
+    \textbf{af\_1\_k101} & 1.39 & 3.69 & 4.18 & 4.40 & 5.46 & 5.38 \\
+    \textbf{nlpkkt80} & 1.44 & 3.24 & 3.81 & 3.93 & 4.13 & 4.03 \\
+    \textbf{PR02R} & 1.43 & 4.09 & 4.37 & 4.61 & 4.36 & 4.32 \\
+    \hline
+    \end{tabular}
+    \caption{GFLOPS per CSR al variare del numero di thread}
+    \end{table}
+    
+    \begin{table}
+    \centering
+    \begin{tabular}{| l | c | c | c | c | c | c |}
+    \hline
+    & \textbf{1} & \textbf{4} & \textbf{8} & \textbf{16} & \textbf{32} & \textbf{40} \\
+    \hline
+    \hline
+    \textbf{Cube\_Coup\_dt0} & 1.28 & 2.45 & 2.67 & 2.77 & 3.18 & 3.25 \\
+    \textbf{ML\_Laplace} & 1.44 & 3.18 & 3.69 & 4.63 & 3.53 & 3.12 \\
+    \textbf{af\_1\_k101} & 1.46 & 2.98 & 3.13 & 3.43 & 3.73 & 3.33 \\
+    \textbf{nlpkkt80} & 1.34 & 2.75 & 2.62 & 2.67 & 2.61 & 2.61 \\
+    \textbf{PR02R} & 0.85 & 1.70 & 1.72 & 1.86 & 1.89 & 3.05 \\
+    \hline
+    \end{tabular}
+    \caption{GFLOPS per HLL al variare del numero di thread}
+    \end{table}
+    
+\end{frame}
+
+\section{Implementazione SpMV CSR con CUDA}
+\begin{frame}
+    \frametitle{Implementazione SpMV CSR con CUDA}
+    
+    Sono state realizzate 3 implementazioni
+    
+    \begin{itemize}
+    	\item Una prima versione "CSRv1" basilare: ogni thread effettua moltiplicazione
+    	di una riga della matrice per $x$
+    	\begin{itemize}
+    		\item Accessi non coalescenti
+    		\item Divergenza dei warp
+    	\end{itemize}
+    	
+    	\item Una seconda versione "CSRv2" dove ogni riga corrisponde ad un warp e solo il primo
+    	thread di ciascun warp effettua la moltiplicazione di una riga per $x$
+    	\begin{itemize}
+    		\item Spreco enorme di risorse
+    		\item Essendo un solo thread nel warp a processare,
+    		non possono esistere problemi legati alla memoria 
+    	\end{itemize}
+    \end{itemize}
+\end{frame}
+
+\subsection{CSRv3}
+\begin{frame}
+    \frametitle{Implementazione SpMV CSR con CUDA (CSRv3)}
+
+    \begin{itemize}
+    	\item Una terza variante "CSRv3": a ogni riga corrispnde un warp e tutti i thread
+    	del warp partecipano alla moltiplicazione della riga per $x$
+    	\begin{itemize}
+    		\item Ciascun thread moltiplica 0,1 o più nonzeri che contribuiscono al prodotto
+    		scalare
+    		\item Utilizzo della memoria condivisa: ogni thread del warp scrive risultato
+    		parziale del prodotto scalare della riga di competenza
+    		\item \texttt{\_\_syncthreads()} non necessario
+    		\item Il primo thread di ciascun warp effettua riduzione, scrive quindi il
+    		risultato in memoria globale
+    		\item Two-way bank conflict per la memoria condivisa presente
+    	\end{itemize}
+    	
+    \end{itemize}
+    
+    In tutte le varianti, essendo i nonzero sparsi sulla riga (in colonne diverse),
+    l'accesso al vettore $x$,
+    non è coalescente (global memory).
+\end{frame}
+
+\section{Implementazione SpMV HLL con CUDA}
+\begin{frame}
+    \frametitle{Implementazione SpMV HLL con CUDA}
+    
+    Sono state realizzate 2 implementazioni e in entrambi i casi $hs = 32$ - viene effettuata la
+    trasposta delle matrici $AS$ e $JA$ per garantire accesso coalescente, 
+    \texttt{cudaMallocPitch} e \texttt{cudaMemcpy2D} vengono utilizzati per accedere a memoria 
+    globale allineata correttamente
+    
+    \begin{itemize}
+    	\item La versione "HLLv1" basilare: ciascun thread moltiplica un blocco ELL per il vettore
+    	$x$
+    	
+    	\begin{itemize}
+    		\item Nonostante le matrici siano trasposte, l'accesso non è coalescente perchè
+    		ciascun thread opera su un blocco ELL diverso
+    	\end{itemize}
+
+    \end{itemize}
+    
+\end{frame}
+
+\subsection{HLLv2}
+\begin{frame}
+    \frametitle{Implementazione SpMV HLL con CUDA (HLLv2)}
+    
+    \begin{itemize}
+    	
+    	\item La versione "HLLv2": il blocco ELL corrisponde al warp e ciascun thread del warp
+    	effettua la moltiplicazione della riga del blocco ELL per $x$
+    	
+    	\begin{itemize}
+    		\item Accessi coalescenti dato che tutti i thread del warp operano sullo stesso blocco
+    		$\Rightarrow$ le trasposte hanno l'effetto desiderato
+    		
+    		\item Utilizzo della memoria condivisa: i thread del warp vi scrivono il risultato
+    		della moltiplicazione della riga per il vettore $x$
+    		
+    		\item \texttt{\_\_syncthreads()} non necessario
+    		\item Il primo thread del warp ha la responsabilità di scrivere i risultati
+    		nella posizione corretta del vettore $y$
+    		
+    		\item Two-way bank conflict presente
+    	\end{itemize}
+    	
+    \end{itemize}
+    
+    Sia per CSRv3 che HLLv2, il two-way bank conflict può essere facilmente risolto passando
+    a operazioni FP32 (e quindi, la shmem deve ospitare dei \texttt{float}s).
+    
+\end{frame}
+
+\section{Qualche misura di prestazioni per CUDA}
+\begin{frame}
+    \frametitle{Qualche misura di prestazioni per CUDA}
+    
+    \begin{table}
+    \centering
+    \begin{tabular}{| l | c | c | c |}
+    \hline
+    & \textbf{CSRv1} & \textbf{CSRv2} & \textbf{CSRv3} \\
+    \hline
+    \hline
+    \textbf{Cube\_Coup\_dt0} & 4.16 & 9.81 & 14.25 \\
+    \textbf{ML\_Laplace} & 3.85 & 8.50 & 14.37 \\
+    \textbf{af\_1\_k101} & 5.24 & 7.99 & 7.41 \\
+    \textbf{nlpkkt80} & 5.96 & 7.70 & 5.86 \\
+    \textbf{PR02R} & 4.07 & 7.90 & 10.40 \\
+    \hline
+    \end{tabular}
+    \caption{GFLOPS per CSR al variare della versione del kernel}
+    \end{table}
+ 
+    \begin{table}
+    \centering
+    \begin{tabular}{| l | c | c |}
+    \hline
+    & \textbf{HLLv1} & \textbf{HLLv2} \\
+    \hline
+    \hline
+    \textbf{Cube\_Coup\_dt0} & 1.92 & 45.10 \\
+    \textbf{ML\_Laplace} & 2.10 & 44.88 \\
+    \textbf{af\_1\_k101} & 2.08 & 42.44 \\
+    \textbf{nlpkkt80} & 1.99 & 42.36 \\
+    \textbf{PR02R} & 1.42 & 31.17 \\
+    \hline
+    \end{tabular}
+    \caption{GFLOPS per HLL al variare della versione del kernel}
+    \end{table}
+    
+\end{frame}
+
+\section{Conclusioni}
+\begin{frame}
+	\frametitle{Conclusioni}
+	
+	\begin{itemize}
+		\item 
+		In termini sommari, HLLv2 GPU è in assoluto la variante che è più performante, mentre la
+		peggiore risulta HLLv1 GPU: questo mostra quanto 
+		ottimizzare è importante, dato il distacco
+		notevole
+	
+		\item In generale, CSR è più prestante su CPU che GPU (e viceversa per HLL)
+	
+		\item Le misure di prestazioni esposte sono parziali rispetto a quelle effettuate sulla
+		totalità delle matrici - ad esempio nel confronto tra CSR e HLL nel caso CPU non ci si 
+		rende conto dell'importante differenza (se si guardano solo le esecuzioni 
+		del kernel su queste 5 matrici) che esiste
+		
+		\item Potrebbe essere una buona idea, specialmente per le GPU, implementare i kernel
+		per operazioni floating point a 32 bit
+		
+	\end{itemize}
+		
+\end{frame}
+
+\begin{frame}
+    \frametitle{}
+    
+    \fontsize{30pt}{10pt}\selectfont
+    \centering
+    \textbf{Grazie per l'attenzione!}
+    
+\end{frame}
+
+\end{document}
