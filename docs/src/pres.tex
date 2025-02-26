@@ -255,8 +255,8 @@
     	\item Una prima versione "CSRv1" basilare: ogni thread effettua moltiplicazione
     	di una riga della matrice per $x$
     	\begin{itemize}
-    		\item Accessi non coalescenti
-    		\item Divergenza dei warp
+    		\item Accessi non coalescenti verso $AS$ e $JA$
+    		\item Divergenza dei warp impatta
     	\end{itemize}
     	
     	\item Una seconda versione "CSRv2" dove ogni riga corrisponde ad un warp e solo il primo
@@ -284,6 +284,7 @@
     		\item \texttt{\_\_syncthreads()} non necessario
     		\item Il primo thread di ciascun warp effettua riduzione, scrive quindi il
     		risultato in memoria globale
+    		\item Accessi coalescenti verso $AS$ e $JA$
     		\item Two-way bank conflict per la memoria condivisa presente
     	\end{itemize}
     	
@@ -308,7 +309,9 @@
     	$x$
     	
     	\begin{itemize}
-    		\item Nonostante le matrici siano trasposte, l'accesso non è coalescente perchè
+    		\item Divergenza dei warp impatta
+    		\item Nonostante le matrici siano trasposte, l'accesso non è coalescente (
+    		$AS$ e $JA$) perchè
     		ciascun thread opera su un blocco ELL diverso
     	\end{itemize}
 
@@ -326,7 +329,8 @@
     	effettua la moltiplicazione della riga del blocco ELL per $x$
     	
     	\begin{itemize}
-    		\item Accessi coalescenti dato che tutti i thread del warp operano sullo stesso blocco
+    		\item Accessi coalescenti ($AS$ e $JA$)
+    		dato che tutti i thread del warp operano sullo stesso blocco
     		$\Rightarrow$ le trasposte hanno l'effetto desiderato
     		
     		\item Utilizzo della memoria condivisa: i thread del warp vi scrivono il risultato
@@ -343,6 +347,8 @@
     
     Sia per CSRv3 che HLLv2, il two-way bank conflict può essere facilmente risolto passando
     a operazioni FP32 (e quindi, la shmem deve ospitare dei \texttt{float}s).
+    
+    Sussiste inoltre il problema dell'accesso non coalescente al vettore $x$.
     
 \end{frame}
 
@@ -383,7 +389,6 @@
     \end{tabular}
     \caption{GFLOPS per HLL al variare della versione del kernel}
     \end{table}
-    
 \end{frame}
 
 \section{Conclusioni}
